@@ -3,9 +3,9 @@
 # Weather Station Raspberry Pi Installation Script
 echo "Installing Weather Station on Raspberry Pi..."
 
-# Update system
-sudo apt update
-sudo apt upgrade -y
+# # Update system
+# sudo apt update
+# sudo apt upgrade -y
 
 # Install Python3 and pip if not already installed
 sudo apt install -y python3 python3-pip python3-venv
