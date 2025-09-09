@@ -1,0 +1,11 @@
+{
+  "ssid": "weather_station",
+  "password": "research",
+  "id": 1,
+  "useStaticIP": false,
+  "staticIP": "192.168.8.1",
+  "gateway": "192.168.8.1",
+  "subnet": "255.255.255.0",
+  "dnsServer": "8.8.8.8",
+  "postUrl": "http://localhost:5000/api/weather"
+}

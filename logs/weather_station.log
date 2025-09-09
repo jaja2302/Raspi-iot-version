@@ -1,0 +1,88 @@
+2025-09-09 10:28:36,888 - INFO - 2025-09-09 10:28:36 - Weather Station Raspberry Pi Version Starting...
+2025-09-09 10:29:30,360 - INFO - 2025-09-09 10:29:30 - Weather Station Raspberry Pi Version Starting...
+2025-09-09 10:29:30,361 - INFO - 2025-09-09 10:29:30 - Starting to load settings...
+2025-09-09 10:29:30,361 - INFO - 2025-09-09 10:29:30 - Settings file found. Attempting to read...
+2025-09-09 10:29:30,361 - INFO - 2025-09-09 10:29:30 - Settings loaded successfully
+2025-09-09 10:29:30,361 - INFO - 2025-09-09 10:29:30 - SSID: weather_station
+2025-09-09 10:29:30,361 - INFO - 2025-09-09 10:29:30 - ID: 1
+2025-09-09 10:29:30,362 - INFO - 2025-09-09 10:29:30 - Database initialized successfully
+2025-09-09 10:29:30,363 - INFO - 2025-09-09 10:29:30 - Weather Station started successfully
+2025-09-09 10:29:30,365 - INFO - 2025-09-09 10:29:30 - Web interface available at: http://localhost:5000
+2025-09-09 10:29:30,365 - INFO - 2025-09-09 10:29:30 - API endpoint: http://localhost:5000/api/weather
+2025-09-09 10:29:30,397 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.9.116.125:5000
+2025-09-09 10:29:30,397 - INFO - [33mPress CTRL+C to quit[0m
+2025-09-09 10:30:23,157 - INFO - 2025-09-09 10:30:23 - Weather Station Raspberry Pi Version Starting...
+2025-09-09 10:30:23,157 - INFO - 2025-09-09 10:30:23 - Starting to load settings...
+2025-09-09 10:30:23,157 - INFO - 2025-09-09 10:30:23 - Settings file found. Attempting to read...
+2025-09-09 10:30:23,158 - INFO - 2025-09-09 10:30:23 - Settings loaded successfully
+2025-09-09 10:30:23,158 - INFO - 2025-09-09 10:30:23 - SSID: weather_station
+2025-09-09 10:30:23,158 - INFO - 2025-09-09 10:30:23 - ID: 1
+2025-09-09 10:30:23,158 - INFO - 2025-09-09 10:30:23 - Database initialized successfully
+2025-09-09 10:30:23,159 - INFO - 2025-09-09 10:30:23 - Weather Station started successfully
+2025-09-09 10:30:23,159 - INFO - 2025-09-09 10:30:23 - Web interface available at: http://localhost:5000
+2025-09-09 10:30:23,159 - INFO - 2025-09-09 10:30:23 - API endpoint: http://localhost:5000/api/weather
+2025-09-09 10:30:23,170 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.9.116.125:5000
+2025-09-09 10:30:23,170 - INFO - [33mPress CTRL+C to quit[0m
+2025-09-09 10:30:32,005 - ERROR - 10.9.116.125 - - [09/Sep/2025 10:30:32] code 400, message Bad request version ('\x00\x02\x01\x00ÿ\x01\x00\x01\x00\x00#\x00\x00\x00\x12\x00\x00DÍ\x00\x05\x00\x03\x02h2\x00')
+2025-09-09 10:30:32,006 - INFO - 10.9.116.125 - - [09/Sep/2025 10:30:32] "[35m[1m\x16\x03\x01\x06 \x01\x00\x06\x9c\x03\x03^\x1e=qk&\x19_óª¼äÁ\x80I¶³\x98í`¬\x12`8Õ\x84ïü\x0f~\x06Õ DF/éz+úÐd¢íØ\x00aU®= ë²p-òÖôà0GÃ%OÔ\x00 ªª\x13\x01\x13\x02\x13\x03À+À/À,À0Ì©Ì¨À\x13À\x14\x00\x9c\x00\x9d\x00/\x005\x01\x00\x063jj\x00\x00\x00\x0d\x00\x12\x00\x10\x04\x03\x08\x04\x04\x01\x05\x03\x08\x05\x05\x01\x08\x06\x06\x01\x00-\x00\x02\x01\x01þ\x0d\x00º\x00\x00\x01\x00\x01\x17\x00 |4ÌíBùñ\x93Óò\x95\x90QÆ?<^)\x9e;j\x9eÚ}i½Ý"i{t9\x00\x90»Ø\x18\x86N\x7f%ò\x0b\x11§ìØ\x91l\x81ûv\x88\x89µh3bv¼\x88ê¹=\x98¼3×\x07\x876¼\x94Y\x119èÁ\x0c3Ú_Új0d~{öbÉ \x1bä©µ;êÃH\x0eg×§!áúÓBó\x99îìÙ¥'\x8e­¦9\x00õD\x91¦\x01=£\x9bö\x1a!µ\x92Oe\x97\\\x85¦òüL;)D<\x1a\x9fÈå\x98?ªÑGHð{\x9cþÇIP\x9cf\x0bFÃW°\x1a\x12iXßÚÄ\x00\x0b\x00\x02\x01\x00ÿ\x01\x00\x01\x00\x00#\x00\x00\x00\x12\x00\x00DÍ\x00\x05\x00\x03\x02h2\x00[0m" HTTPStatus.BAD_REQUEST -
+2025-09-09 10:30:32,008 - ERROR - 10.9.116.125 - - [09/Sep/2025 10:30:32] code 400, message Bad request syntax ('\x16\x03\x01\x06À\x01\x00\x06¼\x03\x03\x9eWüÂî]xR\x95§6\x00!5\x14\x9dËåR\t')
+2025-09-09 10:30:32,008 - INFO - 10.9.116.125 - - [09/Sep/2025 10:30:32] "[35m[1m\x16\x03\x01\x06À\x01\x00\x06¼\x03\x03\x9eWüÂî]xR\x95§6\x00!5\x14\x9dËåR\x09[0m" HTTPStatus.BAD_REQUEST -
+2025-09-09 10:30:33,300 - INFO - 2025-09-09 10:30:33 - Error in handle_root: No filter named 'file_exists' found.
+2025-09-09 10:30:33,301 - INFO - 10.9.116.125 - - [09/Sep/2025 10:30:33] "[35m[1mGET / HTTP/1.1[0m" 500 -
+2025-09-09 10:30:33,325 - INFO - 10.9.116.125 - - [09/Sep/2025 10:30:33] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-09-09 10:30:42,527 - INFO - 2025-09-09 10:30:42 - Error in handle_root: No filter named 'file_exists' found.
+2025-09-09 10:30:42,527 - INFO - 127.0.0.1 - - [09/Sep/2025 10:30:42] "[35m[1mGET / HTTP/1.1[0m" 500 -
+2025-09-09 10:30:42,555 - INFO - 127.0.0.1 - - [09/Sep/2025 10:30:42] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-09-09 10:30:45,349 - INFO - 2025-09-09 10:30:45 - Error in handle_root: No filter named 'file_exists' found.
+2025-09-09 10:30:45,350 - INFO - 127.0.0.1 - - [09/Sep/2025 10:30:45] "[35m[1mGET / HTTP/1.1[0m" 500 -
+2025-09-09 10:31:23,768 - INFO - 2025-09-09 10:31:23 - Watchdog timeout! Restarting system...
+2025-09-09 10:32:00,255 - INFO - 2025-09-09 10:32:00 - Weather Station Raspberry Pi Version Starting...
+2025-09-09 10:32:00,255 - INFO - 2025-09-09 10:32:00 - Starting to load settings...
+2025-09-09 10:32:00,255 - INFO - 2025-09-09 10:32:00 - Settings file found. Attempting to read...
+2025-09-09 10:32:00,256 - INFO - 2025-09-09 10:32:00 - Settings loaded successfully
+2025-09-09 10:32:00,256 - INFO - 2025-09-09 10:32:00 - SSID: weather_station
+2025-09-09 10:32:00,256 - INFO - 2025-09-09 10:32:00 - ID: 1
+2025-09-09 10:32:00,257 - INFO - 2025-09-09 10:32:00 - Database initialized successfully
+2025-09-09 10:32:00,257 - INFO - 2025-09-09 10:32:00 - Weather Station started successfully
+2025-09-09 10:32:00,257 - INFO - 2025-09-09 10:32:00 - Web interface available at: http://localhost:5000
+2025-09-09 10:32:00,257 - INFO - 2025-09-09 10:32:00 - API endpoint: http://localhost:5000/api/weather
+2025-09-09 10:32:00,267 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.9.116.125:5000
+2025-09-09 10:32:00,267 - INFO - [33mPress CTRL+C to quit[0m
+2025-09-09 10:32:08,926 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:08] "GET / HTTP/1.1" 200 -
+2025-09-09 10:32:08,952 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:08] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:09,118 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:09] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-09-09 10:32:09,959 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:09] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:10,952 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:10] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:11,955 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:11] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:12,962 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:12] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:13,963 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:13] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:14,963 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:14] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:15,971 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:15] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:16,956 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:16] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:17,954 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:17] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:18,961 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:18] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:19,911 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:19] "GET /download?file=weather.db HTTP/1.1" 200 -
+2025-09-09 10:32:19,958 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:19] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:20,959 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:20] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:22,018 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:22] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:23,020 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:23] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:24,016 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:24] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:25,027 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:25] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:26,017 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:26] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:27,029 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:27] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:28,022 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:28] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:29,028 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:29] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:30,021 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:30] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:31,019 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:31] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:32,020 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:32] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:33,029 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:33] "GET /serial HTTP/1.1" 200 -
+2025-09-09 10:32:34,024 - INFO - 127.0.0.1 - - [09/Sep/2025 10:32:34] "GET /serial HTTP/1.1" 200 -

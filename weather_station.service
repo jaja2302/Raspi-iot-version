@@ -1,0 +1,14 @@
+[Unit]
+Description=Weather Station Raspberry Pi Service
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/weather-station
+ExecStart=/usr/bin/python3 /home/pi/weather-station/weather_station.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
