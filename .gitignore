@@ -125,3 +125,16 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+
+# Ignore data folder
+data/
+
+# Ignore Python cache
+__pycache__/
+
+# Ignore virtual environment
+venv/
+
+# Ignore logs
+logs/
