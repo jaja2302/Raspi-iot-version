@@ -608,8 +608,11 @@ def handle_save_settings():
         return f"Error: {str(e)}", 500
 
 @app.route('/post', methods=['POST'])
+@app.route('/data/report', methods=['POST'])  # Ecowitt endpoint
+@app.route('/weatherstation/updateweatherstation.php', methods=['POST'])  # Wunderground endpoint
+@app.route('/v1/current_conditions', methods=['POST'])  # WeatherCloud endpoint
 def handle_post():
-    """Handle weather data POST (equivalent to handlePost in C++)"""
+    """Handle weather data POST from various weather services (Ecowitt, Wunderground, etc.)"""
     try:
         # Parse weather data from request
         # Use device ID from Raspberry Pi settings as default if not provided

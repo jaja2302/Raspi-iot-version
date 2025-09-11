@@ -20,12 +20,40 @@ apt install -y hostapd dnsmasq iptables-persistent
 systemctl stop hostapd
 systemctl stop dnsmasq
 
+# Detect available WiFi interfaces
+echo "Detecting WiFi interfaces..."
+WIFI_INTERFACES=$(iw dev | grep Interface | awk '{print $2}')
+WIFI_COUNT=$(echo "$WIFI_INTERFACES" | wc -l)
+
+echo "Found $WIFI_COUNT WiFi interface(s): $WIFI_INTERFACES"
+
+if [ "$WIFI_COUNT" -eq 1 ]; then
+    WIFI_CLIENT=$(echo "$WIFI_INTERFACES" | head -n1)
+    WIFI_AP=$WIFI_CLIENT
+    echo "⚠️  Single WiFi adapter detected: $WIFI_CLIENT"
+    echo "⚠️  This will disconnect from current WiFi and create hotspot"
+    echo "⚠️  Internet access will be lost unless you have Ethernet connection"
+    read -p "Continue? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Setup cancelled."
+        exit 1
+    fi
+elif [ "$WIFI_COUNT" -ge 2 ]; then
+    WIFI_CLIENT=$(echo "$WIFI_INTERFACES" | head -n1)
+    WIFI_AP=$(echo "$WIFI_INTERFACES" | tail -n1)
+    echo "✅ Dual WiFi detected: Client=$WIFI_CLIENT, AP=$WIFI_AP"
+else
+    echo "❌ No WiFi interfaces found!"
+    exit 1
+fi
+
 # Configure dhcpcd
-echo "Configuring network interface..."
+echo "Configuring network interface for $WIFI_AP..."
 cat >> /etc/dhcpcd.conf << EOF
 
 # Weather Station WiFi Hotspot
-interface wlan0
+interface $WIFI_AP
     static ip_address=192.168.4.1/24
     nohook wpa_supplicant
 EOF
@@ -58,6 +86,21 @@ mv /etc/dnsmasq.conf /etc/dnsmasq.conf.orig
 cat > /etc/dnsmasq.conf << EOF
 interface=wlan0
 dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
+
+# DNS hijacking for Misol weather services
+# Redirect all weather service URLs to local Raspberry Pi
+address=/www.ecowitt.net/192.168.4.1
+address=/ecowitt.net/192.168.4.1
+address=/www.wunderground.com/192.168.4.1
+address=/wunderground.com/192.168.4.1
+address=/www.weathercloud.net/192.168.4.1
+address=/weathercloud.net/192.168.4.1
+address=/www.weatherobservationswebsite.com/192.168.4.1
+address=/weatherobservationswebsite.com/192.168.4.1
+
+# Default DNS for other requests
+server=8.8.8.8
+server=1.1.1.1
 EOF
 
 # Configure IP forwarding
