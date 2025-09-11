@@ -484,6 +484,9 @@ def handle_post():
 @app.route('/serial')
 def handle_serial():
     """Get serial monitor output (equivalent to handleSerial in C++)"""
+    # Update last activity for watchdog (but don't log this request)
+    config.last_activity = time.time()
+    
     output = ""
     for i in range(config.serial_buffer_size):
         index = (config.serial_buffer_index + i) % config.serial_buffer_size
