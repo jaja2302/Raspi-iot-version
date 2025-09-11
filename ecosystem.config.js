@@ -2,9 +2,9 @@ module.exports = {
   apps: [
     {
       name: 'weather-station',
-      script: '/home/pi/Raspi-iot-version/weather_station.py',
-      interpreter: '/home/pi/Raspi-iot-version/venv/bin/python',
-      cwd: '/home/pi/Raspi-iot-version',
+      script: '/home/daraspi01/Raspi-iot-version/weather_station.py',
+      interpreter: '/home/daraspi01/Raspi-iot-version/venv/bin/python',
+      cwd: '/home/daraspi01/Raspi-iot-version',
       instances: 1,
       autorestart: true,
       watch: false,
@@ -27,9 +27,9 @@ module.exports = {
     },
     {
       name: 'weather-interceptor',
-      script: '/home/pi/Raspi-iot-version/weather_interceptor.py',
-      interpreter: '/home/pi/Raspi-iot-version/venv/bin/python',
-      cwd: '/home/pi/Raspi-iot-version',
+      script: '/home/daraspi01/Raspi-iot-version/weather_interceptor.py',
+      interpreter: '/home/daraspi01/Raspi-iot-version/venv/bin/python',
+      cwd: '/home/daraspi01/Raspi-iot-version',
       instances: 1,
       autorestart: true,
       watch: false,
