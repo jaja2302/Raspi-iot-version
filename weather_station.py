@@ -115,6 +115,7 @@ def init_database():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS weather_data (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id INTEGER NOT NULL,
                 datetime TEXT NOT NULL,
                 windspeed_kmh REAL,
                 wind_direction INTEGER,
@@ -155,15 +156,16 @@ def save_weather_data(data):
         
         cursor.execute('''
             INSERT INTO weather_data (
-                datetime, windspeed_kmh, wind_direction, rain_rate_in,
+                device_id, datetime, windspeed_kmh, wind_direction, rain_rate_in,
                 temp_in_c, temp_out_c, humidity_in, humidity_out,
                 uv_index, wind_gust_kmh, barometric_pressure_rel_in,
                 barometric_pressure_abs_in, solar_radiation_wm2,
                 daily_rain_in, rain_today_in, total_rain_in,
                 weekly_rain_in, monthly_rain_in, yearly_rain_in,
                 max_daily_gust, wh65_batt
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
+            data.get('device_id', 1),
             data.get('datetime', ''),
             data.get('windspeed_kmh', 0),
             data.get('wind_direction', 0),
@@ -273,7 +275,16 @@ def handle_post():
     """Handle weather data POST (equivalent to handlePost in C++)"""
     try:
         # Parse weather data from request
+        # Use device ID from ESP32 settings as default if not provided
+        device_id = request.form.get('id')
+        if device_id:
+            device_id = int(device_id)
+        else:
+            # Use ID from ESP32 settings file as default
+            device_id = config.settings.get('id', 1)
+        
         weather_data = {
+            'device_id': device_id,
             'datetime': request.form.get('dateutc', ''),
             'windspeed_kmh': float(request.form.get('windspeedmph', 0)) * 1.60934,
             'wind_direction': int(request.form.get('winddir', 0)),
@@ -303,7 +314,7 @@ def handle_post():
             dt += timedelta(hours=7)
             weather_data['datetime'] = dt.strftime('%Y-%m-%d %H:%M:%S')
         
-        add_to_serial_buffer(f"Received weather data: {weather_data['datetime']}")
+        add_to_serial_buffer(f"Received weather data from device {weather_data['device_id']}: {weather_data['datetime']}")
         
         if save_weather_data(weather_data):
             config.last_activity = time.time()
@@ -356,6 +367,11 @@ def api_weather():
     """API endpoint for receiving weather data from ESP32"""
     try:
         data = request.get_json()
+        
+        # Add device_id if not provided
+        if 'device_id' not in data:
+            data['device_id'] = config.settings.get('id', 1)
+        
         if save_weather_data(data):
             return jsonify({"status": "success", "message": "Data saved"}), 200
         else:
