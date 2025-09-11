@@ -196,27 +196,27 @@
                 {% set latest = recent_data[0] %}
                 <div class="weather-card">
                     <div class="weather-label">Temperature (Outdoor)</div>
-                    <div class="weather-value">{{ "%.1f"|format(latest[6]) }}°C</div>
-                </div>
-                <div class="weather-card">
-                    <div class="weather-label">Temperature (Indoor)</div>
-                    <div class="weather-value">{{ "%.1f"|format(latest[5]) }}°C</div>
-                </div>
-                <div class="weather-card">
-                    <div class="weather-label">Wind Speed</div>
-                    <div class="weather-value">{{ "%.1f"|format(latest[2]) }} km/h</div>
+                    <div class="weather-value">{{ "%.1f"|format(latest[1]|float) if latest[1] is not none else "N/A" }}°C</div>
                 </div>
                 <div class="weather-card">
                     <div class="weather-label">Humidity (Outdoor)</div>
-                    <div class="weather-value">{{ latest[8] }}%</div>
+                    <div class="weather-value">{{ latest[2] if latest[2] is not none else "N/A" }}%</div>
                 </div>
                 <div class="weather-card">
-                    <div class="weather-label">UV Index</div>
-                    <div class="weather-value">{{ latest[9] }}</div>
+                    <div class="weather-label">Wind Speed</div>
+                    <div class="weather-value">{{ "%.1f"|format(latest[3]|float) if latest[3] is not none else "N/A" }} km/h</div>
+                </div>
+                <div class="weather-card">
+                    <div class="weather-label">Wind Direction</div>
+                    <div class="weather-value">{{ latest[4] if latest[4] is not none else "N/A" }}°</div>
                 </div>
                 <div class="weather-card">
                     <div class="weather-label">Pressure</div>
-                    <div class="weather-value">{{ "%.1f"|format(latest[11]) }} inHg</div>
+                    <div class="weather-value">{{ "%.1f"|format(latest[5]|float) if latest[5] is not none else "N/A" }} inHg</div>
+                </div>
+                <div class="weather-card">
+                    <div class="weather-label">Device ID</div>
+                    <div class="weather-value">{{ latest[7] if latest[7] is not none else "N/A" }}</div>
                 </div>
             {% else %}
                 <p>No weather data available yet.</p>
@@ -309,28 +309,26 @@
         <!-- Recent Data Table -->
         <h2>Recent Weather Data</h2>
         <table>
-            <tr>aja
+            <tr>
                 <th>Date/Time</th>
+                <th>Temp Out (°C)</th>
+                <th>Humidity Out (%)</th>
                 <th>Wind Speed (km/h)</th>
                 <th>Wind Dir</th>
-                <th>Temp In (°C)</th>
-                <th>Temp Out (°C)</th>
-                <th>Humidity In (%)</th>
-                <th>Humidity Out (%)</th>
-                <th>UV Index</th>
                 <th>Pressure (inHg)</th>
+                <th>Model</th>
+                <th>Device ID</th>
             </tr>
             {% for data in recent_data %}
             <tr>
-                <td>{{ data[1] }}</td>
-                <td>{{ "%.1f"|format(data[2]) }}</td>
-                <td>{{ data[3] }}°</td>
-                <td>{{ "%.1f"|format(data[5]) }}</td>
-                <td>{{ "%.1f"|format(data[6]) }}</td>
-                <td>{{ data[7] }}</td>
-                <td>{{ data[8] }}</td>
-                <td>{{ data[9] }}</td>
-                <td>{{ "%.1f"|format(data[11]) }}</td>
+                <td>{{ data[0] if data[0] is not none else "N/A" }}</td>
+                <td>{{ "%.1f"|format(data[1]|float) if data[1] is not none else "N/A" }}</td>
+                <td>{{ data[2] if data[2] is not none else "N/A" }}</td>
+                <td>{{ "%.1f"|format(data[3]|float) if data[3] is not none else "N/A" }}</td>
+                <td>{{ data[4] if data[4] is not none else "N/A" }}°</td>
+                <td>{{ "%.1f"|format(data[5]|float) if data[5] is not none else "N/A" }}</td>
+                <td>{{ data[6] if data[6] is not none else "N/A" }}</td>
+                <td>{{ data[7] if data[7] is not none else "N/A" }}</td>
             </tr>
             {% endfor %}
         </table>
