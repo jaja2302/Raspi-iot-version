@@ -889,47 +889,109 @@ def api_weather_latest():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-def get_network_ip():
-    """Get the actual network IP address of the Raspberry Pi"""
+@app.route('/api/network/info')
+def api_network_info():
+    """API endpoint to get current network information"""
     try:
-        # Method 1: Connect to a remote address to determine local IP
+        network_info = get_network_info()
+        server_port = config.raspi_settings.get('web_server_port', 5000)
+        
+        return jsonify({
+            "status": "success",
+            "network_info": {
+                "local_ip": network_info['local_ip'],
+                "wifi_ssid": network_info['wifi_ssid'],
+                "wifi_mode": network_info['wifi_mode'],
+                "network_interfaces": network_info['network_interfaces'],
+                "server_port": server_port,
+                "web_interface_url": f"http://{network_info['local_ip']}:{server_port}",
+                "api_endpoint": f"http://{network_info['local_ip']}:{server_port}/api/weather",
+                "misol_endpoint": f"http://{network_info['local_ip']}:{server_port}/post",
+                "misol_config": {
+                    "wifi_ssid": network_info['wifi_ssid'] if network_info['wifi_ssid'] else "Any WiFi (connect to same network)",
+                    "server_url": f"http://{network_info['local_ip']}:{server_port}/post"
+                }
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+def get_network_info():
+    """Get network information including IP, SSID, and connection type"""
+    try:
+        import subprocess
         import socket
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        
+        # Get IP address
+        local_ip = "127.0.0.1"
         try:
-            # Connect to a remote address (doesn't actually send data)
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(("8.8.8.8", 80))
             local_ip = s.getsockname()[0]
-            return local_ip
-        except Exception:
-            pass
-        finally:
             s.close()
-        
-        # Method 2: Try to get IP from hostname
-        try:
-            hostname = socket.gethostname()
-            local_ip = socket.gethostbyname(hostname)
-            if local_ip and not local_ip.startswith('127.'):
-                return local_ip
         except Exception:
             pass
         
-        # Method 3: Try to get IP from network interfaces
+        # Get WiFi SSID (if connected to WiFi)
+        wifi_ssid = None
+        wifi_mode = "unknown"
+        
         try:
-            import subprocess
+            # Check if connected to WiFi
+            result = subprocess.run(['iwgetid', '-r'], capture_output=True, text=True)
+            if result.returncode == 0 and result.stdout.strip():
+                wifi_ssid = result.stdout.strip()
+                wifi_mode = "client"
+            else:
+                # Check if running as access point
+                result = subprocess.run(['systemctl', 'is-active', 'hostapd'], capture_output=True, text=True)
+                if result.returncode == 0 and 'active' in result.stdout:
+                    wifi_mode = "access_point"
+                    # Try to get AP SSID from hostapd config
+                    try:
+                        with open('/etc/hostapd/hostapd.conf', 'r') as f:
+                            for line in f:
+                                if line.startswith('ssid='):
+                                    wifi_ssid = line.split('=')[1].strip()
+                                    break
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        
+        # Get all network interfaces
+        network_interfaces = []
+        try:
             result = subprocess.run(['hostname', '-I'], capture_output=True, text=True)
             if result.returncode == 0:
                 ips = result.stdout.strip().split()
                 for ip in ips:
-                    if ip and not ip.startswith('127.') and not ip.startswith('192.168.4.'):
-                        return ip
+                    if ip and not ip.startswith('127.'):
+                        network_interfaces.append(ip)
         except Exception:
             pass
         
-        # Fallback to localhost
-        return "127.0.0.1"
+        return {
+            'local_ip': local_ip,
+            'wifi_ssid': wifi_ssid,
+            'wifi_mode': wifi_mode,
+            'network_interfaces': network_interfaces
+        }
     except Exception:
-        return "127.0.0.1"
+        return {
+            'local_ip': '127.0.0.1',
+            'wifi_ssid': None,
+            'wifi_mode': 'unknown',
+            'network_interfaces': []
+        }
+
+def get_network_ip():
+    """Get the actual network IP address of the Raspberry Pi"""
+    network_info = get_network_info()
+    return network_info['local_ip']
 
 def main():
     """Main function to start the weather station"""
@@ -959,18 +1021,43 @@ def main():
     cleanup_thread = threading.Thread(target=cleanup_scheduler, daemon=True)
     cleanup_thread.start()
     
-    # Get Raspberry Pi IP address - use improved method
-    local_ip = get_network_ip()
+    # Get network information dynamically
+    network_info = get_network_info()
+    local_ip = network_info['local_ip']
+    wifi_ssid = network_info['wifi_ssid']
+    wifi_mode = network_info['wifi_mode']
+    network_interfaces = network_info['network_interfaces']
     
     # Get server port from settings
     server_port = config.raspi_settings.get('web_server_port', 5000)
     
     add_to_serial_buffer("Weather Station started successfully")
-    add_to_serial_buffer(f"WiFi Access Point: {config.raspi_settings['ap_ssid']}")
-    add_to_serial_buffer(f"Access Point IP: {config.raspi_settings['ap_ip']}")
+    
+    # Display network information dynamically
+    if wifi_mode == "client" and wifi_ssid:
+        add_to_serial_buffer(f"WiFi Mode: CLIENT - Connected to: {wifi_ssid}")
+    elif wifi_mode == "access_point" and wifi_ssid:
+        add_to_serial_buffer(f"WiFi Mode: ACCESS POINT - SSID: {wifi_ssid}")
+    else:
+        add_to_serial_buffer(f"WiFi Mode: {wifi_mode.upper()}")
+        if wifi_ssid:
+            add_to_serial_buffer(f"WiFi SSID: {wifi_ssid}")
+    
+    add_to_serial_buffer(f"Network IP: {local_ip}")
+    if len(network_interfaces) > 1:
+        add_to_serial_buffer(f"All IPs: {', '.join(network_interfaces)}")
+    
     add_to_serial_buffer(f"Web interface available at: http://{local_ip}:{server_port}")
     add_to_serial_buffer(f"API endpoint: http://{local_ip}:{server_port}/api/weather")
-    add_to_serial_buffer(f"Misol endpoint: http://{config.raspi_settings['ap_ip']}:{server_port}/post")
+    add_to_serial_buffer(f"Misol endpoint: http://{local_ip}:{server_port}/post")
+    
+    # Show Misol configuration info
+    add_to_serial_buffer("=" * 50)
+    add_to_serial_buffer("MISOL CONFIGURATION:")
+    add_to_serial_buffer(f"WiFi SSID: {wifi_ssid if wifi_ssid else 'Any WiFi (connect to same network)'}")
+    add_to_serial_buffer(f"Server URL: http://{local_ip}:{server_port}/post")
+    add_to_serial_buffer("=" * 50)
+    
     add_to_serial_buffer("Auto-cleanup enabled - will clean data older than 2 months every 24 hours")
     add_to_serial_buffer(f"External sync enabled: {config.raspi_settings['external_sync']['enabled']}")
     if config.raspi_settings['external_sync']['enabled']:
