@@ -1,0 +1,37 @@
+{
+    "device_name": "WeatherStation_RaspberryPi",
+    "device_id": 44,
+    "wifi_mode": "access_point",
+    "ap_ssid": "WeatherStation_Pi",
+    "ap_password": "weather123",
+    "ap_ip": "192.168.4.1",
+    "ap_gateway": "192.168.4.1",
+    "ap_subnet": "255.255.255.0",
+    "dhcp_start": "192.168.4.2",
+    "dhcp_end": "192.168.4.20",
+    "dns_server": "8.8.8.8",
+    "web_server_port": 5000,
+    "misol_endpoint": "/post",
+    "api_endpoint": "/api/weather",
+    "external_sync": {
+        "enabled": true,
+        "server_url": "http://srs-ssms.com/iot/post-aws-to-api.php",
+        "sync_interval_minutes": 15,
+        "retry_attempts": 3,
+        "timeout_seconds": 30
+    },
+    "data_storage": {
+        "database_file": "data/weather.db",
+        "csv_file": "data/weather_data.csv",
+        "auto_cleanup_days": 60,
+        "max_storage_mb": 500
+    },
+    "network": {
+        "internet_check_url": "http://8.8.8.8",
+        "internet_check_interval": 60,
+        "fallback_dns": [
+            "8.8.8.8",
+            "1.1.1.1"
+        ]
+    }
+}

@@ -15,32 +15,63 @@ import threading
 import time
 import requests
 from pathlib import Path
-
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/weather_station.log'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+import subprocess
+import socket
 
 app = Flask(__name__)
 CORS(app)
+
+# Setup logging with daily log files
+def setup_logging():
+    """Setup logging with daily log files"""
+    # Create logs directory if it doesn't exist
+    os.makedirs('logs', exist_ok=True)
+    
+    # Generate log filename with current date
+    today = datetime.now().strftime('%Y%m%d')
+    log_filename = f'logs/weather_station_{today}.log'
+    
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_filename),
+            logging.StreamHandler()
+        ]
+    )
+    
+    # Disable Flask request logging to reduce spam
+    logging.getLogger('werkzeug').setLevel(logging.WARNING)
+    
+    return logging.getLogger(__name__)
+
+# Initialize logger
+logger = setup_logging()
+
+# Custom logging filter to exclude /serial requests
+class NoSerialLogFilter(logging.Filter):
+    def filter(self, record):
+        # Exclude /serial requests from logging
+        return '/serial' not in record.getMessage()
+
+# Apply filter to werkzeug logger
+werkzeug_logger = logging.getLogger('werkzeug')
+werkzeug_logger.addFilter(NoSerialLogFilter())
 
 # Configuration
 class Config:
     def __init__(self):
         self.data_file = "data/weather_data.csv"
         self.settings_file = "data/settings.json"
+        self.raspi_settings_file = "raspi_settings.json"
         self.db_file = "data/weather.db"
         self.station_id = 1
         self.post_interval = 3  # seconds
         self.watchdog_timeout = 60  # seconds
+        self.sync_queue = []  # Queue for data that needs to be synced to external server
         
-        # Default settings
+        # Default settings (legacy support)
         self.settings = {
             "ssid": "weather_station",
             "password": "research",
@@ -51,6 +82,42 @@ class Config:
             "subnet": "255.255.255.0",
             "dnsServer": "8.8.8.8",
             "postUrl": "http://localhost:5000/api/weather"
+        }
+        
+        # Raspberry Pi specific settings
+        self.raspi_settings = {
+            "device_name": "WeatherStation_RaspberryPi",
+            "device_id": 44,
+            "wifi_mode": "access_point",
+            "ap_ssid": "WeatherStation_Pi",
+            "ap_password": "weather123",
+            "ap_ip": "192.168.4.1",
+            "ap_gateway": "192.168.4.1",
+            "ap_subnet": "255.255.255.0",
+            "dhcp_start": "192.168.4.2",
+            "dhcp_end": "192.168.4.20",
+            "dns_server": "8.8.8.8",
+            "web_server_port": 5000,
+            "misol_endpoint": "/post",
+            "api_endpoint": "/api/weather",
+            "external_sync": {
+                "enabled": True,
+                "server_url": "http://srs-ssms.com/iot/post-aws-to-api.php",
+                "sync_interval_minutes": 15,
+                "retry_attempts": 3,
+                "timeout_seconds": 30
+            },
+            "data_storage": {
+                "database_file": "data/weather.db",
+                "csv_file": "data/weather_data.csv",
+                "auto_cleanup_days": 60,
+                "max_storage_mb": 500
+            },
+            "network": {
+                "internet_check_url": "http://8.8.8.8",
+                "internet_check_interval": 60,
+                "fallback_dns": ["8.8.8.8", "1.1.1.1"]
+            }
         }
         
         # Serial buffer for logging
@@ -80,30 +147,157 @@ def load_settings():
     """Load settings from JSON file (equivalent to loadSettings in C++)"""
     add_to_serial_buffer("Starting to load settings...")
     
+    # Load legacy settings first
     if os.path.exists(config.settings_file):
-        add_to_serial_buffer("Settings file found. Attempting to read...")
+        add_to_serial_buffer("Legacy settings file found. Attempting to read...")
         try:
             with open(config.settings_file, 'r') as file:
                 settings_data = json.load(file)
                 config.settings.update(settings_data)
-                add_to_serial_buffer("Settings loaded successfully")
-                add_to_serial_buffer(f"SSID: {config.settings['ssid']}")
-                add_to_serial_buffer(f"ID: {config.settings['id']}")
+                add_to_serial_buffer("Legacy settings loaded successfully")
         except Exception as e:
-            add_to_serial_buffer(f"Failed to read settings file: {str(e)}")
+            add_to_serial_buffer(f"Failed to read legacy settings file: {str(e)}")
+    
+    # Load Raspberry Pi settings
+    if os.path.exists(config.raspi_settings_file):
+        add_to_serial_buffer("Raspberry Pi settings file found. Attempting to read...")
+        try:
+            with open(config.raspi_settings_file, 'r') as file:
+                raspi_data = json.load(file)
+                config.raspi_settings.update(raspi_data)
+                add_to_serial_buffer("Raspberry Pi settings loaded successfully")
+                add_to_serial_buffer(f"WiFi SSID: {config.raspi_settings['ap_ssid']}")
+                add_to_serial_buffer(f"Device ID: {config.raspi_settings['device_id']}")
+                add_to_serial_buffer(f"Access Point IP: {config.raspi_settings['ap_ip']}")
+        except Exception as e:
+            add_to_serial_buffer(f"Failed to read Raspberry Pi settings file: {str(e)}")
     else:
-        add_to_serial_buffer("Settings file not found. Using default settings...")
-        save_settings()
+        add_to_serial_buffer("Raspberry Pi settings file not found. Using default settings...")
+        save_raspi_settings()
 
 def save_settings():
-    """Save settings to JSON file (equivalent to saveSettings in C++)"""
+    """Save legacy settings to JSON file (equivalent to saveSettings in C++)"""
     try:
         os.makedirs(os.path.dirname(config.settings_file), exist_ok=True)
         with open(config.settings_file, 'w') as file:
             json.dump(config.settings, file, indent=2)
-        add_to_serial_buffer("Settings saved successfully")
+        add_to_serial_buffer("Legacy settings saved successfully")
     except Exception as e:
-        add_to_serial_buffer(f"Failed to save settings: {str(e)}")
+        add_to_serial_buffer(f"Failed to save legacy settings: {str(e)}")
+
+def save_raspi_settings():
+    """Save Raspberry Pi settings to JSON file"""
+    try:
+        with open(config.raspi_settings_file, 'w') as file:
+            json.dump(config.raspi_settings, file, indent=4)
+        add_to_serial_buffer("Raspberry Pi settings saved successfully")
+    except Exception as e:
+        add_to_serial_buffer(f"Failed to save Raspberry Pi settings: {str(e)}")
+
+def check_internet_connection():
+    """Check if internet connection is available"""
+    try:
+        # Try to connect to Google DNS
+        socket.create_connection(("8.8.8.8", 53), timeout=5)
+        return True
+    except OSError:
+        try:
+            # Fallback: try Cloudflare DNS
+            socket.create_connection(("1.1.1.1", 53), timeout=5)
+            return True
+        except OSError:
+            return False
+
+def sync_data_to_server(weather_data):
+    """Sync weather data to external server if internet is available"""
+    if not config.raspi_settings['external_sync']['enabled']:
+        return False
+    
+    if not check_internet_connection():
+        # Add to sync queue for later
+        config.sync_queue.append(weather_data.copy())
+        add_to_serial_buffer(f"No internet connection. Data queued for sync (queue size: {len(config.sync_queue)})")
+        return False
+    
+    try:
+        sync_config = config.raspi_settings['external_sync']
+        
+        # Prepare data for external server (same format as ESP32 was sending)
+        sync_data = {
+            'id': weather_data.get('device_id', config.raspi_settings['device_id']),
+            'dateutc': weather_data.get('datetime', ''),
+            'windspeedmph': weather_data.get('windspeed_kmh', 0) / 1.60934,  # Convert back to mph
+            'winddir': weather_data.get('wind_direction', 0),
+            'rainratein': weather_data.get('rain_rate_in', 0),
+            'tempinf': weather_data.get('temp_in_c', 0) * 9.0/5.0 + 32.0,  # Convert back to Fahrenheit
+            'tempf': weather_data.get('temp_out_c', 0) * 9.0/5.0 + 32.0,    # Convert back to Fahrenheit
+            'humidityin': weather_data.get('humidity_in', 0),
+            'humidity': weather_data.get('humidity_out', 0),
+            'uv': weather_data.get('uv_index', 0),
+            'windgustmph': weather_data.get('wind_gust_kmh', 0) / 1.60934,  # Convert back to mph
+            'baromrelin': weather_data.get('barometric_pressure_rel_in', 0),
+            'baromabsin': weather_data.get('barometric_pressure_abs_in', 0),
+            'solarradiation': weather_data.get('solar_radiation_wm2', 0),
+            'dailyrainin': weather_data.get('daily_rain_in', 0),
+            'raintodayin': weather_data.get('rain_today_in', 0),
+            'totalrainin': weather_data.get('total_rain_in', 0),
+            'weeklyrainin': weather_data.get('weekly_rain_in', 0),
+            'monthlyrainin': weather_data.get('monthly_rain_in', 0),
+            'yearlyrainin': weather_data.get('yearly_rain_in', 0),
+            'maxdailygust': weather_data.get('max_daily_gust', 0),
+            'wh65batt': weather_data.get('wh65_batt', 0)
+        }
+        
+        # Send to external server
+        response = requests.post(
+            sync_config['server_url'],
+            data=sync_data,
+            timeout=sync_config['timeout_seconds']
+        )
+        
+        if response.status_code == 200:
+            add_to_serial_buffer(f"Data synced to external server successfully")
+            return True
+        else:
+            add_to_serial_buffer(f"Failed to sync data to external server: HTTP {response.status_code}")
+            config.sync_queue.append(weather_data.copy())
+            return False
+            
+    except Exception as e:
+        add_to_serial_buffer(f"Error syncing data to external server: {str(e)}")
+        config.sync_queue.append(weather_data.copy())
+        return False
+
+def process_sync_queue():
+    """Process queued data when internet becomes available"""
+    if not check_internet_connection():
+        return
+    
+    if not config.sync_queue:
+        return
+    
+    add_to_serial_buffer(f"Internet connection detected. Processing sync queue ({len(config.sync_queue)} items)...")
+    
+    successful_syncs = 0
+    failed_syncs = 0
+    
+    # Process queue (make a copy to avoid modification during iteration)
+    queue_copy = config.sync_queue.copy()
+    config.sync_queue.clear()
+    
+    for weather_data in queue_copy:
+        if sync_data_to_server(weather_data):
+            successful_syncs += 1
+        else:
+            failed_syncs += 1
+    
+    add_to_serial_buffer(f"Sync queue processed: {successful_syncs} successful, {failed_syncs} failed")
+    
+    # Limit queue size to prevent memory issues
+    if len(config.sync_queue) > 1000:
+        removed_items = len(config.sync_queue) - 1000
+        config.sync_queue = config.sync_queue[-1000:]
+        add_to_serial_buffer(f"Sync queue size limited: removed {removed_items} oldest items")
 
 def init_database():
     """Initialize SQLite database for weather data"""
@@ -146,6 +340,102 @@ def init_database():
         add_to_serial_buffer("Database initialized successfully")
     except Exception as e:
         add_to_serial_buffer(f"Failed to initialize database: {str(e)}")
+
+def cleanup_old_data():
+    """Clean up data older than 2 months to prevent memory issues"""
+    try:
+        conn = sqlite3.connect(config.db_file)
+        cursor = conn.cursor()
+        
+        # Calculate date 2 months ago
+        two_months_ago = datetime.now() - timedelta(days=60)
+        cutoff_date = two_months_ago.strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Count records to be deleted
+        cursor.execute('SELECT COUNT(*) FROM weather_data WHERE created_at < ?', (cutoff_date,))
+        count_to_delete = cursor.fetchone()[0]
+        
+        if count_to_delete > 0:
+            # Delete old records
+            cursor.execute('DELETE FROM weather_data WHERE created_at < ?', (cutoff_date,))
+            conn.commit()
+            
+            # Vacuum database to reclaim space
+            cursor.execute('VACUUM')
+            
+            add_to_serial_buffer(f"Auto-cleanup completed - {count_to_delete} old records deleted (older than {cutoff_date})")
+        else:
+            add_to_serial_buffer("Auto-cleanup: No old records found to delete")
+        
+        conn.close()
+        return True, count_to_delete
+        
+    except Exception as e:
+        add_to_serial_buffer(f"Failed to cleanup old data: {str(e)}")
+        return False, 0
+
+def clear_old_logs():
+    """Clear log files that are not from today"""
+    try:
+        log_dir = 'logs'
+        if not os.path.exists(log_dir):
+            return True, 0
+        
+        files_deleted = 0
+        today = datetime.now().strftime('%Y%m%d')
+        current_log = f'weather_station_{today}.log'  # Today's log file
+        
+        for filename in os.listdir(log_dir):
+            file_path = os.path.join(log_dir, filename)
+            if os.path.isfile(file_path) and filename != current_log:
+                try:
+                    os.remove(file_path)
+                    files_deleted += 1
+                    add_to_serial_buffer(f"Deleted old log file: {filename}")
+                except OSError as e:
+                    add_to_serial_buffer(f"Could not delete {filename}: {str(e)}")
+        
+        if files_deleted > 0:
+            add_to_serial_buffer(f"Old log files cleared - {files_deleted} files deleted")
+        else:
+            add_to_serial_buffer("No old log files found to delete")
+        
+        return True, files_deleted
+        
+    except Exception as e:
+        add_to_serial_buffer(f"Failed to clear old logs: {str(e)}")
+        return False, 0
+
+def reset_database():
+    """Reset database - clear all weather data"""
+    try:
+        conn = sqlite3.connect(config.db_file)
+        cursor = conn.cursor()
+        
+        # Count records before deletion
+        cursor.execute('SELECT COUNT(*) FROM weather_data')
+        count_before = cursor.fetchone()[0]
+        
+        # Delete all records from weather_data table
+        cursor.execute('DELETE FROM weather_data')
+        
+        # Reset auto-increment counter
+        cursor.execute('DELETE FROM sqlite_sequence WHERE name="weather_data"')
+        
+        conn.commit()
+        conn.close()
+        
+        # Also clear CSV file
+        if os.path.exists(config.data_file):
+            with open(config.data_file, 'w') as file:
+                file.write('')  # Clear the file
+        
+        add_to_serial_buffer(f"Database reset successfully - {count_before} records deleted")
+        return True, count_before
+        
+    except Exception as e:
+        add_to_serial_buffer(f"Failed to reset database: {str(e)}")
+        return False, 0
 
 def save_weather_data(data):
     """Save weather data to database and CSV file"""
@@ -200,6 +490,10 @@ def save_weather_data(data):
             file.write(csv_line + '\n')
         
         add_to_serial_buffer("Weather data saved successfully")
+        
+        # Try to sync data to external server if internet is available
+        sync_data_to_server(data)
+        
         return True
         
     except Exception as e:
@@ -217,16 +511,59 @@ def watchdog_timer():
         time.sleep(1)
         config.watchdog_timer += 1
         
-        if config.watchdog_timer >= config.watchdog_timeout:
-            add_to_serial_buffer("Watchdog timeout! Restarting system...")
-            # In a real implementation, you might want to restart the service
+        # Reset watchdog if there's recent activity (web requests, data saves, etc.)
+        current_time = time.time()
+        if current_time - config.last_activity < 30:  # Reset if activity within 30 seconds
             config.watchdog_timer = 0
+        
+        if config.watchdog_timer >= config.watchdog_timeout:
+            add_to_serial_buffer("Watchdog timeout! System appears idle, resetting watchdog...")
+            # Just reset the watchdog, don't actually restart
+            config.watchdog_timer = 0
+            config.last_activity = time.time()  # Update last activity
+
+def cleanup_scheduler():
+    """Scheduler for automatic cleanup and sync - runs daily"""
+    last_cleanup = time.time()
+    last_sync_check = time.time()
+    cleanup_interval = 24 * 60 * 60  # Run cleanup every 24 hours
+    sync_check_interval = config.raspi_settings['external_sync']['sync_interval_minutes'] * 60  # Convert to seconds
+    
+    while True:
+        time.sleep(60)  # Check every minute
+        current_time = time.time()
+        
+        # Check sync queue periodically
+        if current_time - last_sync_check >= sync_check_interval:
+            if config.sync_queue:
+                process_sync_queue()
+            last_sync_check = current_time
+        
+        # Check if it's time for cleanup (every 24 hours)
+        if current_time - last_cleanup >= cleanup_interval:
+            add_to_serial_buffer("Starting daily cleanup...")
+            
+            # 1. Cleanup old database records (> 2 months)
+            cleanup_old_data()
+            
+            # 2. Clear old log files (not from today)
+            clear_old_logs()
+            
+            # 3. Process any remaining sync queue
+            if config.sync_queue:
+                process_sync_queue()
+            
+            last_cleanup = current_time
+            add_to_serial_buffer("Daily cleanup completed")
 
 # Flask Routes
 @app.route('/')
 def handle_root():
     """Main web interface (equivalent to handleRoot in C++)"""
     try:
+        # Update last activity for watchdog
+        config.last_activity = time.time()
+        
         # Get recent weather data
         conn = sqlite3.connect(config.db_file)
         cursor = conn.cursor()
@@ -271,17 +608,20 @@ def handle_save_settings():
         return f"Error: {str(e)}", 500
 
 @app.route('/post', methods=['POST'])
+@app.route('/data/report', methods=['POST'])  # Ecowitt endpoint
+@app.route('/weatherstation/updateweatherstation.php', methods=['POST'])  # Wunderground endpoint
+@app.route('/v1/current_conditions', methods=['POST'])  # WeatherCloud endpoint
 def handle_post():
-    """Handle weather data POST (equivalent to handlePost in C++)"""
+    """Handle weather data POST from various weather services (Ecowitt, Wunderground, etc.)"""
     try:
         # Parse weather data from request
-        # Use device ID from ESP32 settings as default if not provided
+        # Use device ID from Raspberry Pi settings as default if not provided
         device_id = request.form.get('id')
         if device_id:
             device_id = int(device_id)
         else:
-            # Use ID from ESP32 settings file as default
-            device_id = config.settings.get('id', 1)
+            # Use ID from Raspberry Pi settings file as default
+            device_id = config.raspi_settings.get('device_id', config.settings.get('id', 1))
         
         weather_data = {
             'device_id': device_id,
@@ -330,6 +670,9 @@ def handle_post():
 @app.route('/serial')
 def handle_serial():
     """Get serial monitor output (equivalent to handleSerial in C++)"""
+    # Update last activity for watchdog (but don't log this request)
+    config.last_activity = time.time()
+    
     output = ""
     for i in range(config.serial_buffer_size):
         index = (config.serial_buffer_index + i) % config.serial_buffer_size
@@ -361,6 +704,145 @@ def handle_restart():
     add_to_serial_buffer("System restart requested")
     # In a real implementation, you might want to restart the service
     return "System restart initiated", 200
+
+@app.route('/reset-database', methods=['POST'])
+def handle_reset_database():
+    """Reset database - clear all weather data"""
+    try:
+        success, count = reset_database()
+        if success:
+            return jsonify({
+                "status": "success", 
+                "message": f"Database reset successfully - {count} records deleted"
+            }), 200
+        else:
+            return jsonify({
+                "status": "error", 
+                "message": "Failed to reset database"
+            }), 500
+    except Exception as e:
+        add_to_serial_buffer(f"Error in handle_reset_database: {str(e)}")
+        return jsonify({
+            "status": "error", 
+            "message": str(e)
+        }), 500
+
+@app.route('/api/database/reset', methods=['POST'])
+def api_reset_database():
+    """API endpoint to reset database"""
+    try:
+        success, count = reset_database()
+        if success:
+            return jsonify({
+                "status": "success", 
+                "message": f"Database reset successfully - {count} records deleted",
+                "records_deleted": count
+            }), 200
+        else:
+            return jsonify({
+                "status": "error", 
+                "message": "Failed to reset database"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "status": "error", 
+            "message": str(e)
+        }), 500
+
+@app.route('/api/database/info')
+def api_database_info():
+    """API endpoint to get database information"""
+    try:
+        conn = sqlite3.connect(config.db_file)
+        cursor = conn.cursor()
+        
+        # Get total records count
+        cursor.execute('SELECT COUNT(*) FROM weather_data')
+        total_records = cursor.fetchone()[0]
+        
+        # Get oldest and newest records
+        cursor.execute('SELECT MIN(created_at), MAX(created_at) FROM weather_data')
+        date_range = cursor.fetchone()
+        oldest_date = date_range[0] if date_range[0] else None
+        newest_date = date_range[1] if date_range[1] else None
+        
+        # Get database file size
+        db_size = os.path.getsize(config.db_file) if os.path.exists(config.db_file) else 0
+        
+        # Get CSV file size
+        csv_size = os.path.getsize(config.data_file) if os.path.exists(config.data_file) else 0
+        
+        conn.close()
+        
+        return jsonify({
+            "status": "success",
+            "database_info": {
+                "total_records": total_records,
+                "oldest_record": oldest_date,
+                "newest_record": newest_date,
+                "database_size_bytes": db_size,
+                "database_size_mb": round(db_size / (1024 * 1024), 2),
+                "csv_size_bytes": csv_size,
+                "csv_size_mb": round(csv_size / (1024 * 1024), 2)
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "status": "error", 
+            "message": str(e)
+        }), 500
+
+@app.route('/api/cleanup', methods=['POST'])
+def api_cleanup():
+    """API endpoint to manually trigger cleanup - only database > 2 months"""
+    try:
+        add_to_serial_buffer("Manual database cleanup requested")
+        
+        # Only cleanup old database records (> 2 months)
+        db_success, db_count = cleanup_old_data()
+        
+        if db_success:
+            return jsonify({
+                "status": "success",
+                "message": f"Database cleanup completed - {db_count} old records deleted"
+            }), 200
+        else:
+            return jsonify({
+                "status": "error",
+                "message": "Database cleanup failed"
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+@app.route('/api/logs/clear', methods=['POST'])
+def api_clear_logs():
+    """API endpoint to clear old log files (not from today)"""
+    try:
+        add_to_serial_buffer("Manual log clear requested")
+        
+        success, count = clear_old_logs()
+        
+        if success:
+            return jsonify({
+                "status": "success",
+                "message": f"Old log files cleared - {count} files deleted"
+            }), 200
+        else:
+            return jsonify({
+                "status": "error",
+                "message": "Failed to clear old log files"
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 @app.route('/api/weather', methods=['POST'])
 def api_weather():
@@ -421,7 +903,7 @@ def main():
     # Initialize serial buffer
     config.serial_buffer = [""] * config.serial_buffer_size
     
-    # Load settings
+    # Load settings (both legacy and Raspberry Pi settings)
     load_settings()
     
     # Initialize database
@@ -431,12 +913,34 @@ def main():
     watchdog_thread = threading.Thread(target=watchdog_timer, daemon=True)
     watchdog_thread.start()
     
+    # Start cleanup scheduler in background
+    cleanup_thread = threading.Thread(target=cleanup_scheduler, daemon=True)
+    cleanup_thread.start()
+    
+    # Get Raspberry Pi IP address
+    try:
+        import socket
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+    except:
+        local_ip = "localhost"
+    
+    # Get server port from settings
+    server_port = config.raspi_settings.get('web_server_port', 5000)
+    
     add_to_serial_buffer("Weather Station started successfully")
-    add_to_serial_buffer(f"Web interface available at: http://localhost:5000")
-    add_to_serial_buffer(f"API endpoint: http://localhost:5000/api/weather")
+    add_to_serial_buffer(f"WiFi Access Point: {config.raspi_settings['ap_ssid']}")
+    add_to_serial_buffer(f"Access Point IP: {config.raspi_settings['ap_ip']}")
+    add_to_serial_buffer(f"Web interface available at: http://{local_ip}:{server_port}")
+    add_to_serial_buffer(f"API endpoint: http://{local_ip}:{server_port}/api/weather")
+    add_to_serial_buffer(f"Misol endpoint: http://{config.raspi_settings['ap_ip']}:{server_port}/post")
+    add_to_serial_buffer("Auto-cleanup enabled - will clean data older than 2 months every 24 hours")
+    add_to_serial_buffer(f"External sync enabled: {config.raspi_settings['external_sync']['enabled']}")
+    if config.raspi_settings['external_sync']['enabled']:
+        add_to_serial_buffer(f"External server: {config.raspi_settings['external_sync']['server_url']}")
     
     # Start Flask app
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=server_port, debug=False)
 
 if __name__ == '__main__':
     main()
