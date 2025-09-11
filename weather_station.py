@@ -17,6 +17,7 @@ import requests
 from pathlib import Path
 import subprocess
 import socket
+from database import WeatherDatabase
 
 app = Flask(__name__)
 CORS(app)
@@ -130,6 +131,9 @@ class Config:
         self.last_activity = time.time()
 
 config = Config()
+
+# Initialize shared database
+db = WeatherDatabase()
 
 def add_to_serial_buffer(message):
     """Add message to serial buffer (equivalent to addToSerialBuffer in C++)"""
@@ -302,41 +306,7 @@ def process_sync_queue():
 def init_database():
     """Initialize SQLite database for weather data"""
     try:
-        os.makedirs(os.path.dirname(config.db_file), exist_ok=True)
-        conn = sqlite3.connect(config.db_file)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS weather_data (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                device_id INTEGER NOT NULL,
-                datetime TEXT NOT NULL,
-                windspeed_kmh REAL,
-                wind_direction INTEGER,
-                rain_rate_in REAL,
-                temp_in_c REAL,
-                temp_out_c REAL,
-                humidity_in INTEGER,
-                humidity_out INTEGER,
-                uv_index REAL,
-                wind_gust_kmh REAL,
-                barometric_pressure_rel_in REAL,
-                barometric_pressure_abs_in REAL,
-                solar_radiation_wm2 REAL,
-                daily_rain_in REAL,
-                rain_today_in REAL,
-                total_rain_in REAL,
-                weekly_rain_in REAL,
-                monthly_rain_in REAL,
-                yearly_rain_in REAL,
-                max_daily_gust REAL,
-                wh65_batt REAL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        conn.commit()
-        conn.close()
+        # Database is already initialized in the global db instance
         add_to_serial_buffer("Database initialized successfully")
     except Exception as e:
         add_to_serial_buffer(f"Failed to initialize database: {str(e)}")
@@ -344,32 +314,12 @@ def init_database():
 def cleanup_old_data():
     """Clean up data older than 2 months to prevent memory issues"""
     try:
-        conn = sqlite3.connect(config.db_file)
-        cursor = conn.cursor()
-        
-        # Calculate date 2 months ago
-        two_months_ago = datetime.now() - timedelta(days=60)
-        cutoff_date = two_months_ago.strftime('%Y-%m-%d %H:%M:%S')
-        
-        # Count records to be deleted
-        cursor.execute('SELECT COUNT(*) FROM weather_data WHERE created_at < ?', (cutoff_date,))
-        count_to_delete = cursor.fetchone()[0]
-        
-        if count_to_delete > 0:
-            # Delete old records
-            cursor.execute('DELETE FROM weather_data WHERE created_at < ?', (cutoff_date,))
-            conn.commit()
-            
-            # Vacuum database to reclaim space
-            cursor.execute('VACUUM')
-            
-            add_to_serial_buffer(f"Auto-cleanup completed - {count_to_delete} old records deleted (older than {cutoff_date})")
+        success, count = db.cleanup_old_data(60)  # 60 days = 2 months
+        if success:
+            add_to_serial_buffer(f"Auto-cleanup completed - {count} old records deleted")
         else:
             add_to_serial_buffer("Auto-cleanup: No old records found to delete")
-        
-        conn.close()
-        return True, count_to_delete
-        
+        return success, count
     except Exception as e:
         add_to_serial_buffer(f"Failed to cleanup old data: {str(e)}")
         return False, 0
@@ -409,29 +359,19 @@ def clear_old_logs():
 def reset_database():
     """Reset database - clear all weather data"""
     try:
-        conn = sqlite3.connect(config.db_file)
-        cursor = conn.cursor()
-        
-        # Count records before deletion
-        cursor.execute('SELECT COUNT(*) FROM weather_data')
-        count_before = cursor.fetchone()[0]
-        
-        # Delete all records from weather_data table
-        cursor.execute('DELETE FROM weather_data')
-        
-        # Reset auto-increment counter
-        cursor.execute('DELETE FROM sqlite_sequence WHERE name="weather_data"')
-        
-        conn.commit()
-        conn.close()
+        success, count = db.reset_database()
         
         # Also clear CSV file
         if os.path.exists(config.data_file):
             with open(config.data_file, 'w') as file:
                 file.write('')  # Clear the file
         
-        add_to_serial_buffer(f"Database reset successfully - {count_before} records deleted")
-        return True, count_before
+        if success:
+            add_to_serial_buffer(f"Database reset successfully - {count} records deleted")
+        else:
+            add_to_serial_buffer("Failed to reset database")
+        
+        return success, count
         
     except Exception as e:
         add_to_serial_buffer(f"Failed to reset database: {str(e)}")
@@ -440,47 +380,10 @@ def reset_database():
 def save_weather_data(data):
     """Save weather data to database and CSV file"""
     try:
-        # Save to database
-        conn = sqlite3.connect(config.db_file)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO weather_data (
-                device_id, datetime, windspeed_kmh, wind_direction, rain_rate_in,
-                temp_in_c, temp_out_c, humidity_in, humidity_out,
-                uv_index, wind_gust_kmh, barometric_pressure_rel_in,
-                barometric_pressure_abs_in, solar_radiation_wm2,
-                daily_rain_in, rain_today_in, total_rain_in,
-                weekly_rain_in, monthly_rain_in, yearly_rain_in,
-                max_daily_gust, wh65_batt
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            data.get('device_id', 1),
-            data.get('datetime', ''),
-            data.get('windspeed_kmh', 0),
-            data.get('wind_direction', 0),
-            data.get('rain_rate_in', 0),
-            data.get('temp_in_c', 0),
-            data.get('temp_out_c', 0),
-            data.get('humidity_in', 0),
-            data.get('humidity_out', 0),
-            data.get('uv_index', 0),
-            data.get('wind_gust_kmh', 0),
-            data.get('barometric_pressure_rel_in', 0),
-            data.get('barometric_pressure_abs_in', 0),
-            data.get('solar_radiation_wm2', 0),
-            data.get('daily_rain_in', 0),
-            data.get('rain_today_in', 0),
-            data.get('total_rain_in', 0),
-            data.get('weekly_rain_in', 0),
-            data.get('monthly_rain_in', 0),
-            data.get('yearly_rain_in', 0),
-            data.get('max_daily_gust', 0),
-            data.get('wh65_batt', 0)
-        ))
-        
-        conn.commit()
-        conn.close()
+        # Save to database using shared database module
+        if not db.save_weather_data(data):
+            add_to_serial_buffer("Failed to save weather data to database")
+            return False
         
         # Save to CSV file (for compatibility with original system)
         csv_line = f"{data.get('datetime', '')},{data.get('windspeed_kmh', 0)},{data.get('wind_direction', 0)},{data.get('rain_rate_in', 0)},{data.get('temp_in_c', 0)},{data.get('temp_out_c', 0)},{data.get('humidity_in', 0)},{data.get('humidity_out', 0)},{data.get('uv_index', 0)},{data.get('wind_gust_kmh', 0)},{data.get('barometric_pressure_rel_in', 0)},{data.get('barometric_pressure_abs_in', 0)},{data.get('solar_radiation_wm2', 0)},{data.get('daily_rain_in', 0)},{data.get('rain_today_in', 0)},{data.get('total_rain_in', 0)},{data.get('weekly_rain_in', 0)},{data.get('monthly_rain_in', 0)},{data.get('yearly_rain_in', 0)},{data.get('max_daily_gust', 0)},{data.get('wh65_batt', 0)}"
@@ -565,11 +468,7 @@ def handle_root():
         config.last_activity = time.time()
         
         # Get recent weather data
-        conn = sqlite3.connect(config.db_file)
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM weather_data ORDER BY created_at DESC LIMIT 10')
-        recent_data = cursor.fetchall()
-        conn.close()
+        recent_data = db.get_recent_data(10)
         
         # Get file list
         files = []
@@ -753,35 +652,25 @@ def api_reset_database():
 def api_database_info():
     """API endpoint to get database information"""
     try:
-        conn = sqlite3.connect(config.db_file)
-        cursor = conn.cursor()
+        db_info = db.get_database_info()
         
-        # Get total records count
-        cursor.execute('SELECT COUNT(*) FROM weather_data')
-        total_records = cursor.fetchone()[0]
-        
-        # Get oldest and newest records
-        cursor.execute('SELECT MIN(created_at), MAX(created_at) FROM weather_data')
-        date_range = cursor.fetchone()
-        oldest_date = date_range[0] if date_range[0] else None
-        newest_date = date_range[1] if date_range[1] else None
-        
-        # Get database file size
-        db_size = os.path.getsize(config.db_file) if os.path.exists(config.db_file) else 0
+        if db_info is None:
+            return jsonify({
+                "status": "error", 
+                "message": "Failed to get database information"
+            }), 500
         
         # Get CSV file size
         csv_size = os.path.getsize(config.data_file) if os.path.exists(config.data_file) else 0
         
-        conn.close()
-        
         return jsonify({
             "status": "success",
             "database_info": {
-                "total_records": total_records,
-                "oldest_record": oldest_date,
-                "newest_record": newest_date,
-                "database_size_bytes": db_size,
-                "database_size_mb": round(db_size / (1024 * 1024), 2),
+                "total_records": db_info["total_records"],
+                "oldest_record": db_info["oldest_record"],
+                "newest_record": db_info["newest_record"],
+                "database_size_bytes": db_info["database_size_bytes"],
+                "database_size_mb": db_info["database_size_mb"],
                 "csv_size_bytes": csv_size,
                 "csv_size_mb": round(csv_size / (1024 * 1024), 2)
             }
@@ -865,24 +754,20 @@ def api_weather():
 def api_weather_latest():
     """API endpoint to get latest weather data"""
     try:
-        conn = sqlite3.connect(config.db_file)
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM weather_data ORDER BY created_at DESC LIMIT 1')
-        data = cursor.fetchone()
-        conn.close()
+        data = db.get_latest_data()
         
         if data:
             return jsonify({
-                "datetime": data[1],
-                "windspeed_kmh": data[2],
-                "wind_direction": data[3],
-                "temp_in_c": data[5],
-                "temp_out_c": data[6],
-                "humidity_in": data[7],
-                "humidity_out": data[8],
-                "uv_index": data[9],
-                "barometric_pressure_rel_in": data[11],
-                "solar_radiation_wm2": data[13]
+                "datetime": data[2],  # datetime column
+                "windspeed_kmh": data[3],  # windspeed_kmh column
+                "wind_direction": data[4],  # wind_direction column
+                "temp_in_c": data[6],  # temp_in_c column
+                "temp_out_c": data[7],  # temp_out_c column
+                "humidity_in": data[8],  # humidity_in column
+                "humidity_out": data[9],  # humidity_out column
+                "uv_index": data[10],  # uv_index column
+                "barometric_pressure_rel_in": data[12],  # barometric_pressure_rel_in column
+                "solar_radiation_wm2": data[14]  # solar_radiation_wm2 column
             })
         else:
             return jsonify({"message": "No data available"}), 404

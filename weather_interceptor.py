@@ -7,62 +7,18 @@ Menangkap data dari tcpdump dan menyimpannya ke database
 import subprocess
 import re
 import json
-import sqlite3
 import os
 import time
 from datetime import datetime
 import threading
 import urllib.parse
+from database import WeatherDatabase
 
 class WeatherInterceptor:
     def __init__(self):
         self.running = False
-        self.db_file = "data/weather.db"
-        self.init_database()
+        self.db = WeatherDatabase()
         
-    def init_database(self):
-        """Initialize database"""
-        try:
-            os.makedirs('data', exist_ok=True)
-            conn = sqlite3.connect(self.db_file)
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS weather_data (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    device_id INTEGER NOT NULL,
-                    datetime TEXT NOT NULL,
-                    windspeed_kmh REAL,
-                    wind_direction INTEGER,
-                    rain_rate_in REAL,
-                    temp_in_c REAL,
-                    temp_out_c REAL,
-                    humidity_in INTEGER,
-                    humidity_out INTEGER,
-                    uv_index REAL,
-                    wind_gust_kmh REAL,
-                    barometric_pressure_rel_in REAL,
-                    barometric_pressure_abs_in REAL,
-                    solar_radiation_wm2 REAL,
-                    daily_rain_in REAL,
-                    rain_today_in REAL,
-                    total_rain_in REAL,
-                    weekly_rain_in REAL,
-                    monthly_rain_in REAL,
-                    yearly_rain_in REAL,
-                    max_daily_gust REAL,
-                    wh65_batt REAL,
-                    model TEXT,
-                    passkey TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            
-            conn.commit()
-            conn.close()
-            print("✅ Database initialized successfully")
-        except Exception as e:
-            print(f"❌ Database init error: {e}")
     
     def parse_weather_data(self, data_string):
         """Parse weather data dari Misol HP2550"""
@@ -115,39 +71,14 @@ class WeatherInterceptor:
     def save_weather_data(self, data):
         """Save weather data to database"""
         try:
-            conn = sqlite3.connect(self.db_file)
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                INSERT INTO weather_data (
-                    device_id, datetime, windspeed_kmh, wind_direction, rain_rate_in,
-                    temp_in_c, temp_out_c, humidity_in, humidity_out,
-                    uv_index, wind_gust_kmh, barometric_pressure_rel_in,
-                    barometric_pressure_abs_in, solar_radiation_wm2,
-                    daily_rain_in, rain_today_in, total_rain_in,
-                    weekly_rain_in, monthly_rain_in, yearly_rain_in,
-                    max_daily_gust, wh65_batt, model, passkey
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                data['device_id'], data['datetime'], data['windspeed_kmh'], 
-                data['wind_direction'], data['rain_rate_in'], data['temp_in_c'], 
-                data['temp_out_c'], data['humidity_in'], data['humidity_out'],
-                data['uv_index'], data['wind_gust_kmh'], data['barometric_pressure_rel_in'],
-                data['barometric_pressure_abs_in'], data['solar_radiation_wm2'],
-                data['daily_rain_in'], data['rain_today_in'], data['total_rain_in'],
-                data['weekly_rain_in'], data['monthly_rain_in'], data['yearly_rain_in'],
-                data['max_daily_gust'], data['wh65_batt'], data['model'], data['passkey']
-            ))
-            
-            conn.commit()
-            conn.close()
-            
-            print(f"✅ Weather data saved: {data['datetime']}")
-            print(f"   Temp: {data['temp_out_c']:.1f}°C, Humidity: {data['humidity_out']}%")
-            print(f"   Wind: {data['windspeed_kmh']:.1f} km/h, Direction: {data['wind_direction']}°")
-            print(f"   Pressure: {data['barometric_pressure_rel_in']:.2f} inHg")
-            print("-" * 50)
-            
+            if self.db.save_weather_data(data):
+                print(f"✅ Weather data saved: {data['datetime']}")
+                print(f"   Temp: {data['temp_out_c']:.1f}°C, Humidity: {data['humidity_out']}%")
+                print(f"   Wind: {data['windspeed_kmh']:.1f} km/h, Direction: {data['wind_direction']}°")
+                print(f"   Pressure: {data['barometric_pressure_rel_in']:.2f} inHg")
+                print("-" * 50)
+            else:
+                print(f"❌ Failed to save weather data")
         except Exception as e:
             print(f"❌ Save error: {e}")
     
@@ -198,19 +129,7 @@ class WeatherInterceptor:
     def show_recent_data(self):
         """Show recent weather data"""
         try:
-            conn = sqlite3.connect(self.db_file)
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                SELECT datetime, temp_out_c, humidity_out, windspeed_kmh, 
-                       wind_direction, barometric_pressure_rel_in, model
-                FROM weather_data 
-                ORDER BY created_at DESC 
-                LIMIT 10
-            ''')
-            
-            results = cursor.fetchall()
-            conn.close()
+            results = self.db.get_recent_data(10)
             
             if results:
                 print("\n📊 Recent Weather Data:")
@@ -219,7 +138,7 @@ class WeatherInterceptor:
                     print(f"Time: {row[0]}")
                     print(f"Temp: {row[1]:.1f}°C, Humidity: {row[2]}%")
                     print(f"Wind: {row[3]:.1f} km/h, Direction: {row[4]}°")
-                    print(f"Pressure: {row[5]:.2f} inHg, Model: {row[6]}")
+                    print(f"Pressure: {row[5]:.2f} inHg, Model: {row[6]}, Device: {row[7]}")
                     print("-" * 80)
             else:
                 print("No weather data found yet")
