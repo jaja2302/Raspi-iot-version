@@ -18,6 +18,8 @@ class WeatherInterceptor:
     def __init__(self):
         self.running = False
         self.db = WeatherDatabase()
+        # Ensure database is initialized
+        self.db.init_database()
         
     
     def parse_weather_data(self, data_string):
