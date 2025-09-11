@@ -89,6 +89,18 @@ mkdir -p data logs templates static/css static/js
 chmod 755 data logs templates static
 echo "✅ Directories created"
 
+# Setup WiFi Hotspot
+echo ""
+echo "Setting up WiFi Hotspot..."
+if [ -f "setup_wifi_hotspot.sh" ]; then
+    chmod +x setup_wifi_hotspot.sh
+    echo "⚠️  WiFi Hotspot setup available but requires manual execution:"
+    echo "   sudo ./setup_wifi_hotspot.sh"
+    echo "   (This will setup WiFi Access Point for Misol connection)"
+else
+    echo "❌ setup_wifi_hotspot.sh not found!"
+fi
+
 # Update ecosystem.config.js with correct path
 echo ""
 echo "Updating PM2 configuration..."
@@ -177,8 +189,22 @@ echo ""
 echo "Configuration:"
 echo "=============="
 echo "Settings: data/settings.json"
+echo "Raspi Config: raspi_settings.json"
 echo "Database: data/weather.db"
 echo "PM2 Config: ecosystem.config.js"
+echo ""
+echo "NEXT STEPS:"
+echo "==========="
+echo "1. Setup WiFi Hotspot (REQUIRED for Misol):"
+echo "   sudo ./setup_wifi_hotspot.sh"
+echo ""
+echo "2. Reboot Raspberry Pi:"
+echo "   sudo reboot"
+echo ""
+echo "3. Configure Misol HP2550:"
+echo "   - Connect to WiFi: WeatherStation_Pi"
+echo "   - Password: weather123"
+echo "   - Set POST URL: http://192.168.4.1:5000/post"
 echo ""
 echo "To uninstall PM2: ./uninstall_pm2.sh"
 echo "=========================================="
