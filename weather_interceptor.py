@@ -9,7 +9,7 @@ import re
 import json
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import threading
 import urllib.parse
 from database import WeatherDatabase
@@ -34,10 +34,23 @@ class WeatherInterceptor:
                 else:
                     weather_data[key] = value
             
+            # Convert UTC datetime to local timezone (GMT+7)
+            utc_datetime_str = weather_data.get('dateutc', '').replace('+', ' ')
+            local_datetime_str = utc_datetime_str
+            
+            try:
+                # Parse UTC datetime
+                utc_dt = datetime.strptime(utc_datetime_str, '%Y-%m-%d %H:%M:%S')
+                # Add 7 hours for GMT+7 (Indonesia timezone)
+                local_dt = utc_dt + timedelta(hours=7)
+                local_datetime_str = local_dt.strftime('%Y-%m-%d %H:%M:%S')
+            except Exception as e:
+                print(f"⚠️  Timezone conversion error: {e}, using original time")
+            
             # Convert to our format
             converted_data = {
                 'device_id': 44,  # Default device ID
-                'datetime': weather_data.get('dateutc', '').replace('+', ' '),
+                'datetime': local_datetime_str,
                 'windspeed_kmh': float(weather_data.get('windspeedmph', 0)) * 1.60934,
                 'wind_direction': int(weather_data.get('winddir', 0)),
                 'rain_rate_in': float(weather_data.get('rainratein', 0)),
