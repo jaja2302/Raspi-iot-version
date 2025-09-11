@@ -889,6 +889,48 @@ def api_weather_latest():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+def get_network_ip():
+    """Get the actual network IP address of the Raspberry Pi"""
+    try:
+        # Method 1: Connect to a remote address to determine local IP
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            # Connect to a remote address (doesn't actually send data)
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            return local_ip
+        except Exception:
+            pass
+        finally:
+            s.close()
+        
+        # Method 2: Try to get IP from hostname
+        try:
+            hostname = socket.gethostname()
+            local_ip = socket.gethostbyname(hostname)
+            if local_ip and not local_ip.startswith('127.'):
+                return local_ip
+        except Exception:
+            pass
+        
+        # Method 3: Try to get IP from network interfaces
+        try:
+            import subprocess
+            result = subprocess.run(['hostname', '-I'], capture_output=True, text=True)
+            if result.returncode == 0:
+                ips = result.stdout.strip().split()
+                for ip in ips:
+                    if ip and not ip.startswith('127.') and not ip.startswith('192.168.4.'):
+                        return ip
+        except Exception:
+            pass
+        
+        # Fallback to localhost
+        return "127.0.0.1"
+    except Exception:
+        return "127.0.0.1"
+
 def main():
     """Main function to start the weather station"""
     add_to_serial_buffer("Weather Station Raspberry Pi Version Starting...")
@@ -917,13 +959,8 @@ def main():
     cleanup_thread = threading.Thread(target=cleanup_scheduler, daemon=True)
     cleanup_thread.start()
     
-    # Get Raspberry Pi IP address
-    try:
-        import socket
-        hostname = socket.gethostname()
-        local_ip = socket.gethostbyname(hostname)
-    except:
-        local_ip = "localhost"
+    # Get Raspberry Pi IP address - use improved method
+    local_ip = get_network_ip()
     
     # Get server port from settings
     server_port = config.raspi_settings.get('web_server_port', 5000)
