@@ -16,19 +16,46 @@ import time
 import requests
 from pathlib import Path
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/weather_station.log'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
-
 app = Flask(__name__)
 CORS(app)
+
+# Setup logging with daily log files
+def setup_logging():
+    """Setup logging with daily log files"""
+    # Create logs directory if it doesn't exist
+    os.makedirs('logs', exist_ok=True)
+    
+    # Generate log filename with current date
+    today = datetime.now().strftime('%Y%m%d')
+    log_filename = f'logs/weather_station_{today}.log'
+    
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_filename),
+            logging.StreamHandler()
+        ]
+    )
+    
+    # Disable Flask request logging to reduce spam
+    logging.getLogger('werkzeug').setLevel(logging.WARNING)
+    
+    return logging.getLogger(__name__)
+
+# Initialize logger
+logger = setup_logging()
+
+# Custom logging filter to exclude /serial requests
+class NoSerialLogFilter(logging.Filter):
+    def filter(self, record):
+        # Exclude /serial requests from logging
+        return '/serial' not in record.getMessage()
+
+# Apply filter to werkzeug logger
+werkzeug_logger = logging.getLogger('werkzeug')
+werkzeug_logger.addFilter(NoSerialLogFilter())
 
 # Configuration
 class Config:
@@ -147,6 +174,102 @@ def init_database():
     except Exception as e:
         add_to_serial_buffer(f"Failed to initialize database: {str(e)}")
 
+def cleanup_old_data():
+    """Clean up data older than 2 months to prevent memory issues"""
+    try:
+        conn = sqlite3.connect(config.db_file)
+        cursor = conn.cursor()
+        
+        # Calculate date 2 months ago
+        two_months_ago = datetime.now() - timedelta(days=60)
+        cutoff_date = two_months_ago.strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Count records to be deleted
+        cursor.execute('SELECT COUNT(*) FROM weather_data WHERE created_at < ?', (cutoff_date,))
+        count_to_delete = cursor.fetchone()[0]
+        
+        if count_to_delete > 0:
+            # Delete old records
+            cursor.execute('DELETE FROM weather_data WHERE created_at < ?', (cutoff_date,))
+            conn.commit()
+            
+            # Vacuum database to reclaim space
+            cursor.execute('VACUUM')
+            
+            add_to_serial_buffer(f"Auto-cleanup completed - {count_to_delete} old records deleted (older than {cutoff_date})")
+        else:
+            add_to_serial_buffer("Auto-cleanup: No old records found to delete")
+        
+        conn.close()
+        return True, count_to_delete
+        
+    except Exception as e:
+        add_to_serial_buffer(f"Failed to cleanup old data: {str(e)}")
+        return False, 0
+
+def clear_old_logs():
+    """Clear log files that are not from today"""
+    try:
+        log_dir = 'logs'
+        if not os.path.exists(log_dir):
+            return True, 0
+        
+        files_deleted = 0
+        today = datetime.now().strftime('%Y%m%d')
+        current_log = f'weather_station_{today}.log'  # Today's log file
+        
+        for filename in os.listdir(log_dir):
+            file_path = os.path.join(log_dir, filename)
+            if os.path.isfile(file_path) and filename != current_log:
+                try:
+                    os.remove(file_path)
+                    files_deleted += 1
+                    add_to_serial_buffer(f"Deleted old log file: {filename}")
+                except OSError as e:
+                    add_to_serial_buffer(f"Could not delete {filename}: {str(e)}")
+        
+        if files_deleted > 0:
+            add_to_serial_buffer(f"Old log files cleared - {files_deleted} files deleted")
+        else:
+            add_to_serial_buffer("No old log files found to delete")
+        
+        return True, files_deleted
+        
+    except Exception as e:
+        add_to_serial_buffer(f"Failed to clear old logs: {str(e)}")
+        return False, 0
+
+def reset_database():
+    """Reset database - clear all weather data"""
+    try:
+        conn = sqlite3.connect(config.db_file)
+        cursor = conn.cursor()
+        
+        # Count records before deletion
+        cursor.execute('SELECT COUNT(*) FROM weather_data')
+        count_before = cursor.fetchone()[0]
+        
+        # Delete all records from weather_data table
+        cursor.execute('DELETE FROM weather_data')
+        
+        # Reset auto-increment counter
+        cursor.execute('DELETE FROM sqlite_sequence WHERE name="weather_data"')
+        
+        conn.commit()
+        conn.close()
+        
+        # Also clear CSV file
+        if os.path.exists(config.data_file):
+            with open(config.data_file, 'w') as file:
+                file.write('')  # Clear the file
+        
+        add_to_serial_buffer(f"Database reset successfully - {count_before} records deleted")
+        return True, count_before
+        
+    except Exception as e:
+        add_to_serial_buffer(f"Failed to reset database: {str(e)}")
+        return False, 0
+
 def save_weather_data(data):
     """Save weather data to database and CSV file"""
     try:
@@ -217,16 +340,47 @@ def watchdog_timer():
         time.sleep(1)
         config.watchdog_timer += 1
         
-        if config.watchdog_timer >= config.watchdog_timeout:
-            add_to_serial_buffer("Watchdog timeout! Restarting system...")
-            # In a real implementation, you might want to restart the service
+        # Reset watchdog if there's recent activity (web requests, data saves, etc.)
+        current_time = time.time()
+        if current_time - config.last_activity < 30:  # Reset if activity within 30 seconds
             config.watchdog_timer = 0
+        
+        if config.watchdog_timer >= config.watchdog_timeout:
+            add_to_serial_buffer("Watchdog timeout! System appears idle, resetting watchdog...")
+            # Just reset the watchdog, don't actually restart
+            config.watchdog_timer = 0
+            config.last_activity = time.time()  # Update last activity
+
+def cleanup_scheduler():
+    """Scheduler for automatic cleanup - runs daily"""
+    last_cleanup = time.time()
+    cleanup_interval = 24 * 60 * 60  # Run cleanup every 24 hours
+    
+    while True:
+        time.sleep(60)  # Check every minute
+        current_time = time.time()
+        
+        # Check if it's time for cleanup (every 24 hours)
+        if current_time - last_cleanup >= cleanup_interval:
+            add_to_serial_buffer("Starting daily cleanup...")
+            
+            # 1. Cleanup old database records (> 2 months)
+            cleanup_old_data()
+            
+            # 2. Clear old log files (not from today)
+            clear_old_logs()
+            
+            last_cleanup = current_time
+            add_to_serial_buffer("Daily cleanup completed")
 
 # Flask Routes
 @app.route('/')
 def handle_root():
     """Main web interface (equivalent to handleRoot in C++)"""
     try:
+        # Update last activity for watchdog
+        config.last_activity = time.time()
+        
         # Get recent weather data
         conn = sqlite3.connect(config.db_file)
         cursor = conn.cursor()
@@ -362,6 +516,145 @@ def handle_restart():
     # In a real implementation, you might want to restart the service
     return "System restart initiated", 200
 
+@app.route('/reset-database', methods=['POST'])
+def handle_reset_database():
+    """Reset database - clear all weather data"""
+    try:
+        success, count = reset_database()
+        if success:
+            return jsonify({
+                "status": "success", 
+                "message": f"Database reset successfully - {count} records deleted"
+            }), 200
+        else:
+            return jsonify({
+                "status": "error", 
+                "message": "Failed to reset database"
+            }), 500
+    except Exception as e:
+        add_to_serial_buffer(f"Error in handle_reset_database: {str(e)}")
+        return jsonify({
+            "status": "error", 
+            "message": str(e)
+        }), 500
+
+@app.route('/api/database/reset', methods=['POST'])
+def api_reset_database():
+    """API endpoint to reset database"""
+    try:
+        success, count = reset_database()
+        if success:
+            return jsonify({
+                "status": "success", 
+                "message": f"Database reset successfully - {count} records deleted",
+                "records_deleted": count
+            }), 200
+        else:
+            return jsonify({
+                "status": "error", 
+                "message": "Failed to reset database"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "status": "error", 
+            "message": str(e)
+        }), 500
+
+@app.route('/api/database/info')
+def api_database_info():
+    """API endpoint to get database information"""
+    try:
+        conn = sqlite3.connect(config.db_file)
+        cursor = conn.cursor()
+        
+        # Get total records count
+        cursor.execute('SELECT COUNT(*) FROM weather_data')
+        total_records = cursor.fetchone()[0]
+        
+        # Get oldest and newest records
+        cursor.execute('SELECT MIN(created_at), MAX(created_at) FROM weather_data')
+        date_range = cursor.fetchone()
+        oldest_date = date_range[0] if date_range[0] else None
+        newest_date = date_range[1] if date_range[1] else None
+        
+        # Get database file size
+        db_size = os.path.getsize(config.db_file) if os.path.exists(config.db_file) else 0
+        
+        # Get CSV file size
+        csv_size = os.path.getsize(config.data_file) if os.path.exists(config.data_file) else 0
+        
+        conn.close()
+        
+        return jsonify({
+            "status": "success",
+            "database_info": {
+                "total_records": total_records,
+                "oldest_record": oldest_date,
+                "newest_record": newest_date,
+                "database_size_bytes": db_size,
+                "database_size_mb": round(db_size / (1024 * 1024), 2),
+                "csv_size_bytes": csv_size,
+                "csv_size_mb": round(csv_size / (1024 * 1024), 2)
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "status": "error", 
+            "message": str(e)
+        }), 500
+
+@app.route('/api/cleanup', methods=['POST'])
+def api_cleanup():
+    """API endpoint to manually trigger cleanup - only database > 2 months"""
+    try:
+        add_to_serial_buffer("Manual database cleanup requested")
+        
+        # Only cleanup old database records (> 2 months)
+        db_success, db_count = cleanup_old_data()
+        
+        if db_success:
+            return jsonify({
+                "status": "success",
+                "message": f"Database cleanup completed - {db_count} old records deleted"
+            }), 200
+        else:
+            return jsonify({
+                "status": "error",
+                "message": "Database cleanup failed"
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+@app.route('/api/logs/clear', methods=['POST'])
+def api_clear_logs():
+    """API endpoint to clear old log files (not from today)"""
+    try:
+        add_to_serial_buffer("Manual log clear requested")
+        
+        success, count = clear_old_logs()
+        
+        if success:
+            return jsonify({
+                "status": "success",
+                "message": f"Old log files cleared - {count} files deleted"
+            }), 200
+        else:
+            return jsonify({
+                "status": "error",
+                "message": "Failed to clear old log files"
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
 @app.route('/api/weather', methods=['POST'])
 def api_weather():
     """API endpoint for receiving weather data from ESP32"""
@@ -431,9 +724,22 @@ def main():
     watchdog_thread = threading.Thread(target=watchdog_timer, daemon=True)
     watchdog_thread.start()
     
+    # Start cleanup scheduler in background
+    cleanup_thread = threading.Thread(target=cleanup_scheduler, daemon=True)
+    cleanup_thread.start()
+    
+    # Get Raspberry Pi IP address
+    try:
+        import socket
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+    except:
+        local_ip = "localhost"
+    
     add_to_serial_buffer("Weather Station started successfully")
-    add_to_serial_buffer(f"Web interface available at: http://localhost:5000")
-    add_to_serial_buffer(f"API endpoint: http://localhost:5000/api/weather")
+    add_to_serial_buffer(f"Web interface available at: http://{local_ip}:5000")
+    add_to_serial_buffer(f"API endpoint: http://{local_ip}:5000/api/weather")
+    add_to_serial_buffer("Auto-cleanup enabled - will clean data older than 2 months every 24 hours")
     
     # Start Flask app
     app.run(host='0.0.0.0', port=5000, debug=False)

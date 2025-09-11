@@ -69,6 +69,54 @@
         .restart:hover {
             background-color: #e68900;
         }
+        .reset-db {
+            background-color: #dc3545;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+        }
+        .reset-db:hover {
+            background-color: #c82333;
+        }
+        .cleanup {
+            background-color: #28a745;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+        }
+        .cleanup:hover {
+            background-color: #218838;
+        }
+        .clear-logs {
+            background-color: #dc3545;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+        }
+        .clear-logs:hover {
+            background-color: #c82333;
+        }
         input[type="text"], input[type="password"], input[type="number"] {
             width: 100%;
             padding: 8px;
@@ -226,6 +274,15 @@
         <a href="/restart" class="restart" onclick="return confirm('Are you sure you want to restart the system?')">
             🔄 RESTART SYSTEM
         </a>
+        <button class="reset-db" onclick="resetDatabase()">
+            🗑️ RESET DATABASE
+        </button>
+        <button class="cleanup" onclick="manualCleanup()">
+            🧹 CLEANUP OLD DATA
+        </button>
+        <button class="clear-logs" onclick="clearLogs()">
+            🗑️ CLEAR LOGS
+        </button>
 
         <!-- File Management -->
         <h2>Data Files</h2>
@@ -305,6 +362,83 @@
             location.reload();
         }
         setInterval(updateWeather, 30000);
+
+        // Reset database function
+        function resetDatabase() {
+            if (confirm('⚠️ WARNING: This will delete ALL weather data from the database!\n\nThis action cannot be undone. Are you sure you want to continue?')) {
+                if (confirm('Are you REALLY sure? This will permanently delete all weather records!')) {
+                    fetch('/api/database/reset', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            alert('✅ ' + data.message);
+                            location.reload(); // Refresh page to show updated data
+                        } else {
+                            alert('❌ Error: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('❌ Error resetting database: ' + error.message);
+                    });
+                }
+            }
+        }
+
+        // Manual cleanup function - only database > 2 months
+        function manualCleanup() {
+            if (confirm('🧹 This will delete weather data older than 2 months from database.\n\nThis helps free up disk space. Continue?')) {
+                fetch('/api/cleanup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert('✅ ' + data.message);
+                        location.reload(); // Refresh page to show updated data
+                    } else {
+                        alert('❌ Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('❌ Error during cleanup: ' + error.message);
+                });
+            }
+        }
+
+        // Clear logs function - delete old log files (not from today)
+        function clearLogs() {
+            if (confirm('🗑️ This will delete old log files (not from today).\n\nToday\'s log will be kept. Continue?')) {
+                fetch('/api/logs/clear', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert('✅ ' + data.message);
+                        location.reload(); // Refresh page to show updated data
+                    } else {
+                        alert('❌ Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('❌ Error clearing logs: ' + error.message);
+                });
+            }
+        }
     </script>
 </body>
 </html>
