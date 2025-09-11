@@ -230,31 +230,39 @@ class WeatherInterceptor:
 def main():
     interceptor = WeatherInterceptor()
     
-    print("🌤️  Misol HP2550 Weather Data Interceptor")
-    print("=" * 50)
-    print("1. Start intercepting")
-    print("2. Show recent data")
-    print("3. Exit")
-    
-    while True:
-        try:
-            choice = input("\nChoose option (1-3): ").strip()
-            
-            if choice == '1':
-                interceptor.start_intercepting()
-            elif choice == '2':
-                interceptor.show_recent_data()
-            elif choice == '3':
-                print("Goodbye! 👋")
-                break
-            else:
-                print("Invalid choice!")
+    # Check if running in PM2 auto mode
+    import os
+    if os.getenv('INTERCEPTOR_MODE') == 'auto':
+        print("🌤️  Misol HP2550 Weather Data Interceptor (PM2 Auto Mode)")
+        print("=" * 60)
+        print("Auto-starting intercepting mode...")
+        interceptor.start_intercepting()
+    else:
+        print("🌤️  Misol HP2550 Weather Data Interceptor")
+        print("=" * 50)
+        print("1. Start intercepting")
+        print("2. Show recent data")
+        print("3. Exit")
+        
+        while True:
+            try:
+                choice = input("\nChoose option (1-3): ").strip()
                 
-        except KeyboardInterrupt:
-            print("\nGoodbye! 👋")
-            break
-        except Exception as e:
-            print(f"Error: {e}")
+                if choice == '1':
+                    interceptor.start_intercepting()
+                elif choice == '2':
+                    interceptor.show_recent_data()
+                elif choice == '3':
+                    print("Goodbye! 👋")
+                    break
+                else:
+                    print("Invalid choice!")
+                    
+            except KeyboardInterrupt:
+                print("\nGoodbye! 👋")
+                break
+            except Exception as e:
+                print(f"Error: {e}")
 
 if __name__ == "__main__":
     main()
