@@ -940,25 +940,79 @@ def get_network_info():
         wifi_mode = "unknown"
         
         try:
-            # Check if connected to WiFi
+            # Method 1: Try iwgetid command
             result = subprocess.run(['iwgetid', '-r'], capture_output=True, text=True)
+            add_to_serial_buffer(f"DEBUG: iwgetid result: returncode={result.returncode}, output='{result.stdout.strip()}'")
             if result.returncode == 0 and result.stdout.strip():
                 wifi_ssid = result.stdout.strip()
                 wifi_mode = "client"
+                add_to_serial_buffer(f"DEBUG: Found SSID via iwgetid: {wifi_ssid}")
             else:
-                # Check if running as access point
-                result = subprocess.run(['systemctl', 'is-active', 'hostapd'], capture_output=True, text=True)
-                if result.returncode == 0 and 'active' in result.stdout:
-                    wifi_mode = "access_point"
-                    # Try to get AP SSID from hostapd config
+                # Method 2: Try iwconfig command
+                result = subprocess.run(['iwconfig'], capture_output=True, text=True)
+                add_to_serial_buffer(f"DEBUG: iwconfig result: returncode={result.returncode}")
+                if result.returncode == 0:
+                    lines = result.stdout.split('\n')
+                    add_to_serial_buffer(f"DEBUG: iwconfig output lines: {len(lines)}")
+                    for line in lines:
+                        if 'ESSID:' in line and 'off/any' not in line:
+                            add_to_serial_buffer(f"DEBUG: Found ESSID line: {line}")
+                            # Extract SSID from line like: wlan0     IEEE 802.11  ESSID:"pi-raspi"
+                            if 'ESSID:"' in line:
+                                start = line.find('ESSID:"') + 7
+                                end = line.find('"', start)
+                                if start < end:
+                                    wifi_ssid = line[start:end]
+                                    wifi_mode = "client"
+                                    add_to_serial_buffer(f"DEBUG: Found SSID via iwconfig: {wifi_ssid}")
+                                    break
+                
+                # Method 3: Check if running as access point
+                if not wifi_ssid:
+                    result = subprocess.run(['systemctl', 'is-active', 'hostapd'], capture_output=True, text=True)
+                    if result.returncode == 0 and 'active' in result.stdout:
+                        wifi_mode = "access_point"
+                        # Try to get AP SSID from hostapd config
+                        try:
+                            with open('/etc/hostapd/hostapd.conf', 'r') as f:
+                                for line in f:
+                                    if line.startswith('ssid='):
+                                        wifi_ssid = line.split('=')[1].strip()
+                                        break
+                        except Exception:
+                            pass
+                
+                # Method 4: Try nmcli (NetworkManager)
+                if not wifi_ssid:
                     try:
-                        with open('/etc/hostapd/hostapd.conf', 'r') as f:
-                            for line in f:
-                                if line.startswith('ssid='):
-                                    wifi_ssid = line.split('=')[1].strip()
+                        result = subprocess.run(['nmcli', '-t', '-f', 'ACTIVE,SSID', 'dev', 'wifi'], capture_output=True, text=True)
+                        if result.returncode == 0:
+                            lines = result.stdout.strip().split('\n')
+                            for line in lines:
+                                if line.startswith('yes:'):
+                                    wifi_ssid = line.split(':', 1)[1]
+                                    wifi_mode = "client"
                                     break
                     except Exception:
                         pass
+                
+                # Method 5: Try wpa_cli
+                if not wifi_ssid:
+                    try:
+                        result = subprocess.run(['wpa_cli', '-i', 'wlan0', 'status'], capture_output=True, text=True)
+                        add_to_serial_buffer(f"DEBUG: wpa_cli result: returncode={result.returncode}")
+                        if result.returncode == 0:
+                            add_to_serial_buffer(f"DEBUG: wpa_cli output: {result.stdout}")
+                            for line in result.stdout.split('\n'):
+                                if line.startswith('ssid='):
+                                    wifi_ssid = line.split('=', 1)[1]
+                                    wifi_mode = "client"
+                                    add_to_serial_buffer(f"DEBUG: Found SSID via wpa_cli: {wifi_ssid}")
+                                    break
+                    except Exception as e:
+                        add_to_serial_buffer(f"DEBUG: wpa_cli error: {str(e)}")
+                        pass
+                        
         except Exception:
             pass
         
@@ -973,6 +1027,9 @@ def get_network_info():
                         network_interfaces.append(ip)
         except Exception:
             pass
+        
+        # Debug summary
+        add_to_serial_buffer(f"DEBUG: Network detection summary - IP: {local_ip}, SSID: {wifi_ssid}, Mode: {wifi_mode}")
         
         return {
             'local_ip': local_ip,
