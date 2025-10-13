@@ -69,20 +69,20 @@ class WeatherDatabase:
                 if column_name not in existing_columns:
                     try:
                         cursor.execute(f'ALTER TABLE weather_data ADD COLUMN {column_name} {column_def}')
-                        print(f"✅ Added missing column: {column_name}")
+                        print(f"[OK] Added missing column: {column_name}")
                     except sqlite3.OperationalError as e:
                         if "duplicate column name" in str(e).lower():
-                            print(f"ℹ️  Column {column_name} already exists")
+                            print(f"[INFO] Column {column_name} already exists")
                         else:
-                            print(f"⚠️  Could not add column {column_name}: {e}")
+                            print(f"[WARN] Could not add column {column_name}: {e}")
             
             conn.commit()
             conn.close()
-            print("✅ Database initialized successfully")
+            print("[OK] Database initialized successfully")
             return True
             
         except Exception as e:
-            print(f"❌ Database init error: {e}")
+            print(f"[ERROR] Database init error: {e}")
             return False
     
     def save_weather_data(self, data):

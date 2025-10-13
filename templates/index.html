@@ -223,48 +223,62 @@
             {% endif %}
         </div>
 
+        <!-- Current Network Information -->
+        <h2>Current Network Information</h2>
+        <div style="background-color: #e8f4fd; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+            <p><strong>Current IP Address:</strong> <span id="current-ip">Loading...</span></p>
+            <p><strong>WiFi SSID:</strong> <span id="current-ssid">Loading...</span></p>
+            <p><strong>Post URL:</strong> <span id="current-post-url">Loading...</span></p>
+            <p><strong>API Endpoint:</strong> <span id="current-api-url">Loading...</span></p>
+        </div>
+
         <!-- Settings Form -->
         <h2>Weather Station Settings</h2>
         <form action="/save" method="POST">
             <table>
                 <tr>
-                    <td>SSID:</td>
-                    <td><input type="text" name="ssid" value="{{ settings.ssid }}"></td>
+                    <td><strong>Device ID:</strong></td>
+                    <td><input type="number" name="id" value="{{ settings.id }}" min="1" max="999" style="font-weight: bold; background-color: #fff3cd;"></td>
                 </tr>
                 <tr>
-                    <td>Password:</td>
-                    <td><input type="password" name="password" value="{{ settings.password }}"></td>
+                    <td>WiFi SSID:</td>
+                    <td><input type="text" name="ssid" value="{{ settings.ssid }}" placeholder="Enter WiFi network name"></td>
                 </tr>
                 <tr>
-                    <td>Station ID:</td>
-                    <td><input type="number" name="id" value="{{ settings.id }}"></td>
+                    <td>WiFi Password:</td>
+                    <td><input type="password" name="password" value="{{ settings.password }}" placeholder="Enter WiFi password"></td>
                 </tr>
                 <tr>
                     <td>Use Static IP:</td>
-                    <td><input type="checkbox" name="useStaticIP" {% if settings.useStaticIP %}checked{% endif %}></td>
+                    <td><input type="checkbox" name="useStaticIP" {% if settings.useStaticIP %}checked{% endif %} onchange="toggleStaticIP()"></td>
                 </tr>
-                <tr>
+                <tr id="static-ip-row" style="{% if not settings.useStaticIP %}display: none;{% endif %}">
                     <td>Static IP:</td>
-                    <td><input type="text" name="staticIP" value="{{ settings.staticIP }}"></td>
+                    <td><input type="text" name="staticIP" value="{{ settings.staticIP }}" placeholder="e.g., 192.168.1.100"></td>
                 </tr>
-                <tr>
+                <tr id="gateway-row" style="{% if not settings.useStaticIP %}display: none;{% endif %}">
                     <td>Gateway:</td>
-                    <td><input type="text" name="gateway" value="{{ settings.gateway }}"></td>
+                    <td><input type="text" name="gateway" value="{{ settings.gateway }}" placeholder="e.g., 192.168.1.1"></td>
                 </tr>
-                <tr>
+                <tr id="subnet-row" style="{% if not settings.useStaticIP %}display: none;{% endif %}">
                     <td>Subnet:</td>
-                    <td><input type="text" name="subnet" value="{{ settings.subnet }}"></td>
+                    <td><input type="text" name="subnet" value="{{ settings.subnet }}" placeholder="e.g., 255.255.255.0"></td>
                 </tr>
                 <tr>
                     <td>DNS Server:</td>
-                    <td><input type="text" name="dnsServer" value="{{ settings.dnsServer }}"></td>
+                    <td><input type="text" name="dnsServer" value="{{ settings.dnsServer }}" placeholder="e.g., 8.8.8.8"></td>
                 </tr>
                 <tr>
                     <td>Post URL:</td>
-                    <td><input type="text" name="postUrl" value="{{ settings.postUrl }}"></td>
+                    <td><input type="text" name="postUrl" value="{{ settings.postUrl }}" readonly style="background-color: #f8f9fa; color: #6c757d;"></td>
                 </tr>
                 <tr>
-                    <td colspan="2"><input type="submit" value="Save Settings"></td>
+                    <td colspan="2">
+                        <input type="submit" value="💾 Save Settings" style="background-color: #28a745; font-weight: bold;">
+                        <button type="button" onclick="autoDetectSettings()" style="background-color: #17a2b8; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">
+                            🔄 Auto-Detect Network
+                        </button>
+                    </td>
                 </tr>
             </table>
         </form>
@@ -351,9 +365,79 @@
                 });
         }
 
+        // Update network information
+        function updateNetworkInfo() {
+            fetch('/api/network/info')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        const networkInfo = data.network_info;
+                        document.getElementById('current-ip').textContent = networkInfo.local_ip;
+                        document.getElementById('current-ssid').textContent = networkInfo.wifi_ssid || 'Not connected';
+                        document.getElementById('current-post-url').textContent = networkInfo.misol_endpoint;
+                        document.getElementById('current-api-url').textContent = networkInfo.api_endpoint;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching network info:', error);
+                });
+        }
+
+        // Toggle static IP fields visibility
+        function toggleStaticIP() {
+            const useStaticIP = document.querySelector('input[name="useStaticIP"]').checked;
+            const staticIPRow = document.getElementById('static-ip-row');
+            const gatewayRow = document.getElementById('gateway-row');
+            const subnetRow = document.getElementById('subnet-row');
+            
+            if (useStaticIP) {
+                staticIPRow.style.display = '';
+                gatewayRow.style.display = '';
+                subnetRow.style.display = '';
+            } else {
+                staticIPRow.style.display = 'none';
+                gatewayRow.style.display = 'none';
+                subnetRow.style.display = 'none';
+            }
+        }
+
+        // Auto-detect network settings
+        function autoDetectSettings() {
+            fetch('/api/network/info')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        const networkInfo = data.network_info;
+                        
+                        // Update form fields with detected values
+                        document.querySelector('input[name="ssid"]').value = networkInfo.wifi_ssid || '';
+                        document.querySelector('input[name="staticIP"]').value = networkInfo.local_ip;
+                        
+                        // Auto-detect gateway (first 3 octets + 1)
+                        const ipParts = networkInfo.local_ip.split('.');
+                        if (ipParts.length === 4) {
+                            document.querySelector('input[name="gateway"]').value = `${ipParts[0]}.${ipParts[1]}.${ipParts[2]}.1`;
+                        }
+                        
+                        // Update Post URL
+                        document.querySelector('input[name="postUrl"]').value = networkInfo.api_endpoint;
+                        
+                        alert('✅ Network settings auto-detected and updated!');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error auto-detecting settings:', error);
+                    alert('❌ Error auto-detecting network settings');
+                });
+        }
+
         // Update serial monitor every second
         setInterval(updateSerial, 1000);
         updateSerial(); // Initial load
+
+        // Update network info every 5 seconds
+        setInterval(updateNetworkInfo, 5000);
+        updateNetworkInfo(); // Initial load
 
         // Auto-refresh weather data every 30 seconds
         function updateWeather() {

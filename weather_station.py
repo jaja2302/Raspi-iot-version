@@ -488,18 +488,55 @@ def handle_root():
 def handle_save_settings():
     """Save settings (equivalent to handleSaveSettings in C++)"""
     try:
+        # Get current network information
+        network_info = get_network_info()
+        current_ip = network_info['local_ip']
+        current_ssid = network_info['wifi_ssid']
+        
+        # Update settings with form data
         config.settings['ssid'] = request.form.get('ssid', config.settings['ssid'])
         config.settings['password'] = request.form.get('password', config.settings['password'])
         config.settings['id'] = int(request.form.get('id', config.settings['id']))
         config.settings['useStaticIP'] = 'useStaticIP' in request.form
-        config.settings['staticIP'] = request.form.get('staticIP', config.settings['staticIP'])
-        config.settings['gateway'] = request.form.get('gateway', config.settings['gateway'])
-        config.settings['subnet'] = request.form.get('subnet', config.settings['subnet'])
-        config.settings['dnsServer'] = request.form.get('dnsServer', config.settings['dnsServer'])
-        config.settings['postUrl'] = request.form.get('postUrl', config.settings['postUrl'])
         
+        # If using static IP, use the provided values, otherwise use dynamic IP
+        if config.settings['useStaticIP']:
+            config.settings['staticIP'] = request.form.get('staticIP', config.settings['staticIP'])
+            config.settings['gateway'] = request.form.get('gateway', config.settings['gateway'])
+            config.settings['subnet'] = request.form.get('subnet', config.settings['subnet'])
+        else:
+            # Use current detected IP for dynamic configuration
+            config.settings['staticIP'] = current_ip
+            # Try to detect gateway (usually first 3 octets + 1)
+            ip_parts = current_ip.split('.')
+            if len(ip_parts) == 4:
+                config.settings['gateway'] = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.1"
+            else:
+                config.settings['gateway'] = "192.168.1.1"  # fallback
+            config.settings['subnet'] = "255.255.255.0"
+        
+        config.settings['dnsServer'] = request.form.get('dnsServer', config.settings['dnsServer'])
+        
+        # Update Post URL to use current IP
+        server_port = config.raspi_settings.get('web_server_port', 5000)
+        config.settings['postUrl'] = f"http://{current_ip}:{server_port}/api/weather"
+        
+        # Also update Raspberry Pi settings with current network info and device ID
+        if current_ssid:
+            config.raspi_settings['ap_ssid'] = current_ssid
+        config.raspi_settings['ap_ip'] = current_ip
+        config.raspi_settings['ap_gateway'] = config.settings['gateway']
+        config.raspi_settings['device_id'] = config.settings['id']  # Update device ID from form
+        
+        # Save both settings files
         save_settings()
-        add_to_serial_buffer("Settings saved successfully")
+        save_raspi_settings()
+        
+        add_to_serial_buffer(f"Settings saved successfully - Using IP: {current_ip}")
+        add_to_serial_buffer(f"Device ID updated to: {config.settings['id']}")
+        add_to_serial_buffer(f"Post URL updated to: {config.settings['postUrl']}")
+        if current_ssid:
+            add_to_serial_buffer(f"WiFi SSID detected: {current_ssid}")
         
         return redirect(url_for('handle_root'))
     except Exception as e:
@@ -972,6 +1009,23 @@ def main():
     
     # Get server port from settings
     server_port = config.raspi_settings.get('web_server_port', 5000)
+    
+    # Update settings with current network information for dynamic IP
+    if not config.settings['useStaticIP']:
+        config.settings['staticIP'] = local_ip
+        # Try to detect gateway (usually first 3 octets + 1)
+        ip_parts = local_ip.split('.')
+        if len(ip_parts) == 4:
+            config.settings['gateway'] = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.1"
+        config.settings['postUrl'] = f"http://{local_ip}:{server_port}/api/weather"
+        
+        # Update Raspberry Pi settings with current IP
+        config.raspi_settings['ap_ip'] = local_ip
+        config.raspi_settings['ap_gateway'] = config.settings['gateway']
+        
+        # Save updated settings
+        save_settings()
+        save_raspi_settings()
     
     add_to_serial_buffer("Weather Station started successfully")
     

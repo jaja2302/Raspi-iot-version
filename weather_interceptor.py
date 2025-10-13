@@ -21,6 +21,40 @@ class WeatherInterceptor:
         # Ensure database is initialized
         self.db.init_database()
         
+        # Load settings
+        self.settings_file = "data/settings.json"
+        self.raspi_settings_file = "raspi_settings.json"
+        self.device_id = 44  # Default device ID
+        
+        # Load settings from files
+        self.load_settings()
+    
+    def load_settings(self):
+        """Load settings from JSON files"""
+        try:
+            # Load legacy settings first
+            if os.path.exists(self.settings_file):
+                with open(self.settings_file, 'r') as file:
+                    settings_data = json.load(file)
+                    self.device_id = settings_data.get('id', 44)
+                    print(f"📋 Loaded device ID from settings: {self.device_id}")
+            
+            # Load Raspberry Pi settings
+            if os.path.exists(self.raspi_settings_file):
+                with open(self.raspi_settings_file, 'r') as file:
+                    raspi_data = json.load(file)
+                    # Use device_id from raspi_settings if available
+                    if 'device_id' in raspi_data:
+                        self.device_id = raspi_data['device_id']
+                        print(f"📋 Loaded device ID from Raspberry Pi settings: {self.device_id}")
+            
+        except Exception as e:
+            print(f"⚠️  Error loading settings: {e}, using default device ID: {self.device_id}")
+    
+    def reload_settings(self):
+        """Reload settings from files (useful for dynamic updates)"""
+        self.load_settings()
+        print(f"🔄 Settings reloaded - Device ID: {self.device_id}")
     
     def parse_weather_data(self, data_string):
         """Parse weather data dari Misol HP2550"""
@@ -51,7 +85,7 @@ class WeatherInterceptor:
             
             # Convert to our format
             converted_data = {
-                'device_id': 44,  # Default device ID
+                'device_id': self.device_id,  # Use device ID from settings
                 'datetime': local_datetime_str,
                 'windspeed_kmh': float(weather_data.get('windspeedmph', 0)) * 1.60934,
                 'wind_direction': int(weather_data.get('winddir', 0)),
@@ -101,6 +135,7 @@ class WeatherInterceptor:
         """Start intercepting weather data"""
         self.running = True
         print("🚀 Starting Weather Data Interceptor...")
+        print(f"📋 Using Device ID: {self.device_id}")
         print("Monitoring for Misol HP2550 data...")
         print("Press Ctrl+C to stop")
         print("=" * 60)
@@ -112,7 +147,16 @@ class WeatherInterceptor:
                 'tcp port 80 or tcp port 443'
             ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             
+            last_settings_reload = time.time()
+            settings_reload_interval = 30  # Reload settings every 30 seconds
+            
             while self.running:
+                # Periodically reload settings to pick up changes
+                current_time = time.time()
+                if current_time - last_settings_reload > settings_reload_interval:
+                    self.reload_settings()
+                    last_settings_reload = current_time
+                
                 line = process.stdout.readline()
                 if line:
                     # Check if line contains weather data
@@ -162,41 +206,48 @@ class WeatherInterceptor:
             print(f"❌ Show data error: {e}")
 
 def main():
+    import sys
     interceptor = WeatherInterceptor()
+    
+    # Check command line arguments
+    auto_mode = False
+    show_data_only = False
+    
+    if len(sys.argv) > 1:
+        if sys.argv[1] in ['-a', '--auto', 'auto']:
+            auto_mode = True
+        elif sys.argv[1] in ['-d', '--data', 'data']:
+            show_data_only = True
+        elif sys.argv[1] in ['-h', '--help', 'help']:
+            print("🌤️  Misol HP2550 Weather Data Interceptor")
+            print("=" * 50)
+            print("Usage:")
+            print("  python weather_interceptor.py           # Interactive mode")
+            print("  python weather_interceptor.py auto      # Auto-start intercepting")
+            print("  python weather_interceptor.py data      # Show recent data only")
+            print("  python weather_interceptor.py help      # Show this help")
+            return
     
     # Check if running in PM2 auto mode
     import os
-    if os.getenv('INTERCEPTOR_MODE') == 'auto':
-        print("🌤️  Misol HP2550 Weather Data Interceptor (PM2 Auto Mode)")
+    if os.getenv('INTERCEPTOR_MODE') == 'auto' or auto_mode:
+        print("🌤️  Misol HP2550 Weather Data Interceptor (Auto Mode)")
         print("=" * 60)
         print("Auto-starting intercepting mode...")
         interceptor.start_intercepting()
+    elif show_data_only:
+        print("🌤️  Misol HP2550 Weather Data Interceptor (Data Mode)")
+        print("=" * 60)
+        interceptor.show_recent_data()
     else:
+        # Default behavior: start intercepting directly
         print("🌤️  Misol HP2550 Weather Data Interceptor")
         print("=" * 50)
-        print("1. Start intercepting")
-        print("2. Show recent data")
-        print("3. Exit")
-        
-        while True:
-            try:
-                choice = input("\nChoose option (1-3): ").strip()
-                
-                if choice == '1':
-                    interceptor.start_intercepting()
-                elif choice == '2':
-                    interceptor.show_recent_data()
-                elif choice == '3':
-                    print("Goodbye! 👋")
-                    break
-                else:
-                    print("Invalid choice!")
-                    
-            except KeyboardInterrupt:
-                print("\nGoodbye! 👋")
-                break
-            except Exception as e:
-                print(f"Error: {e}")
+        print(f"📋 Current Device ID: {interceptor.device_id}")
+        print("Starting network sniffing automatically...")
+        print("Press Ctrl+C to stop")
+        print("=" * 50)
+        interceptor.start_intercepting()
 
 if __name__ == "__main__":
     main()
