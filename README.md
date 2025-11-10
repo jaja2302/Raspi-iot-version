@@ -84,26 +84,32 @@ Pastikan virtual environment sudah aktif sebelum menjalankan perintah `python we
 ## Pengelolaan Layanan dengan PM2
 ```bash
 # Menjalankan weather system
-pm2 start ecosystem.config.js
+sudo pm2 start ecosystem.config.js
 ```
 
 > **Catatan penting:** Setelah layanan berjalan, sambungkan perangkat Misol AWS ke hotspot Wi-Fi Raspberry Pi (`iot-da`) agar data cuaca dapat diterima.
 
 ```bash
 # Memeriksa status
-pm2 status
+sudo pm2 status
 
 # Melihat log
-pm2 logs weather-system
+sudo pm2 logs weather-system
 
 # Menghentikan weather system
-pm2 stop weather-system
+sudo pm2 stop weather-system
 
 # Me-restart weather system
-pm2 restart weather-system
+sudo pm2 restart weather-system
 
 # Menghapus dari PM2
-pm2 delete weather-system
+sudo pm2 delete weather-system
+
+# Menyimpan daftar proses saat ini
+sudo pm2 save
+
+# Mengaktifkan startup PM2 pada boot
+sudo pm2 startup
 ```
 
 ## Troubleshooting & Debugging
