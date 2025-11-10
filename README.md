@@ -105,6 +105,22 @@ pm2 restart weather-system
 pm2 delete weather-system
 ```
 
+## Troubleshooting & Debugging
+- Jika perangkat Misol terhubung ke hotspot namun tidak ada data yang masuk, pastikan Raspberry Pi memiliki paket `tcpdump`:
+  ```bash
+  sudo apt update
+  sudo apt install tcpdump
+  ```
+- Temukan IP perangkat Misol melalui tabel ARP:
+  ```bash
+  arp -a | grep <MAC_ADDRESS_MISOL>
+  ```
+- Sniff paket HTTP dari Misol untuk memastikan data terkirim:
+  ```bash
+  sudo tcpdump -i wlan0 -n host <IP_MISOL>
+  ```
+- Semua paket mentah yang terdeteksi juga dicatat pada `logs/misol_raw_packets.log` oleh `weather_interceptor.py`.
+
 ## Antarmuka Web
 - `http://localhost:5000`
 - `http://ALAMAT_IP_PI_ANDA:5000`
