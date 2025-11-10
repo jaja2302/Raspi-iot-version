@@ -29,6 +29,7 @@ class WeatherInterceptor:
         # Raw packet log file
         self.raw_log_file = "logs/misol_raw_packets.log"
         os.makedirs(os.path.dirname(self.raw_log_file), exist_ok=True)
+        self.enable_raw_logging = False
         
         # Load settings from files
         self.load_settings()
@@ -124,6 +125,8 @@ class WeatherInterceptor:
     
     def log_raw_packet(self, line):
         """Write raw tcpdump line to log for debugging"""
+        if not self.enable_raw_logging:
+            return
         try:
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             line = line.rstrip('\n')
