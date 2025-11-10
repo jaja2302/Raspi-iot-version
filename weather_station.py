@@ -179,6 +179,12 @@ def load_settings():
         add_to_serial_buffer("Raspberry Pi settings file not found. Using default settings...")
         save_raspi_settings()
 
+    # Ensure legacy settings device ID stays in sync with Raspberry Pi settings
+    device_id = config.raspi_settings.get('device_id')
+    if device_id is not None:
+        config.settings['id'] = device_id
+        add_to_serial_buffer(f"Device ID synchronized to settings: {device_id}")
+
 def save_settings():
     """Save legacy settings to JSON file (equivalent to saveSettings in C++)"""
     try:
