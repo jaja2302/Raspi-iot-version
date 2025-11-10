@@ -28,6 +28,9 @@ class WeatherInterceptor:
         
         # Load settings from files
         self.load_settings()
+        
+        # Cache of last detected clients
+        self.connected_clients = []
     
     def load_settings(self):
         """Load settings from JSON files"""
@@ -58,10 +61,75 @@ class WeatherInterceptor:
                 self.device_id = 99
             print(f"⚠️  Error loading settings: {e}, using device ID: {self.device_id}")
     
+    def log_connected_devices(self):
+        """Detect and log Wi-Fi clients connected to the Raspberry Pi AP"""
+        clients = set()
+        try:
+            # Prefer iw station dump for devices connected to wlan0
+            iw_result = subprocess.run(
+                ['iw', 'dev', 'wlan0', 'station', 'dump'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if iw_result.returncode == 0 and iw_result.stdout:
+                for line in iw_result.stdout.splitlines():
+                    line = line.strip()
+                    if line.startswith('Station '):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            clients.add(parts[1].lower())
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            print(f"⚠️  iw scan error: {e}")
+        
+        # Fallback to arp table if iw didn't return anything
+        if not clients:
+            try:
+                arp_result = subprocess.run(
+                    ['arp', '-a'],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if arp_result.returncode == 0 and arp_result.stdout:
+                    for line in arp_result.stdout.splitlines():
+                        parts = line.split()
+                        # Typical format: ? (192.168.4.2) at aa:bb:cc:dd:ee:ff [ether] on wlan0
+                        if len(parts) >= 4 and parts[3] != '<incomplete>':
+                            mac = parts[3].lower()
+                            if self._is_mac_address(mac):
+                                clients.add(mac)
+            except FileNotFoundError:
+                pass
+            except Exception as e:
+                print(f"⚠️  arp scan error: {e}")
+        
+        if clients:
+            sorted_clients = sorted(clients)
+            if sorted_clients != self.connected_clients:
+                print("📡 Connected Wi-Fi clients detected:")
+                for mac in sorted_clients:
+                    print(f"   - {mac}")
+                self.connected_clients = sorted_clients
+        else:
+            if self.connected_clients:
+                print("📡 Tidak ada klien Wi-Fi terdeteksi saat ini.")
+                self.connected_clients = []
+    
+    @staticmethod
+    def _is_mac_address(candidate):
+        if len(candidate) != 17:
+            return False
+        allowed = set('0123456789abcdef:')
+        return all(ch in allowed for ch in candidate)
+    
     def reload_settings(self):
         """Reload settings from files (useful for dynamic updates)"""
         self.load_settings()
         print(f"🔄 Settings reloaded - Device ID: {self.device_id}")
+        self.log_connected_devices()
     
     def parse_weather_data(self, data_string):
         """Parse weather data dari Misol HP2550"""
@@ -146,6 +214,9 @@ class WeatherInterceptor:
         print("Monitoring for Misol HP2550 data...")
         print("Press Ctrl+C to stop")
         print("=" * 60)
+        
+        # Log connected devices once at startup
+        self.log_connected_devices()
         
         try:
             # Start tcpdump process
