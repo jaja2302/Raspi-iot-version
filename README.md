@@ -110,6 +110,9 @@ sudo pm2 save
 
 # Mengaktifkan startup PM2 pada boot
 sudo pm2 startup
+sudo pm2 save
+
+
 ```
 
 ## Troubleshooting & Debugging
