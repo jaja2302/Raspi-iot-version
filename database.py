@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 class WeatherDatabase:
     def __init__(self, db_file="data/weather.db"):
         self.db_file = db_file
+        self.last_insert_duplicate = False
         self.init_database()
     
     def init_database(self):
@@ -52,6 +53,12 @@ class WeatherDatabase:
                 )
             ''')
             
+            # Ensure uniqueness for device_id + datetime to prevent duplicates
+            cursor.execute('''
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_weather_device_datetime
+                ON weather_data(device_id, datetime)
+            ''')
+            
             # Check existing schema and add missing columns
             cursor.execute("PRAGMA table_info(weather_data)")
             columns = cursor.fetchall()
@@ -91,8 +98,9 @@ class WeatherDatabase:
             conn = sqlite3.connect(self.db_file)
             cursor = conn.cursor()
             
+            self.last_insert_duplicate = False
             cursor.execute('''
-                INSERT INTO weather_data (
+                INSERT OR IGNORE INTO weather_data (
                     device_id, datetime, windspeed_kmh, wind_direction, rain_rate_in,
                     temp_in_c, temp_out_c, humidity_in, humidity_out,
                     uv_index, wind_gust_kmh, barometric_pressure_rel_in,
@@ -128,8 +136,14 @@ class WeatherDatabase:
                 data.get('passkey', '')
             ))
             
+            inserted = cursor.rowcount
             conn.commit()
             conn.close()
+            
+            if inserted == 0:
+                self.last_insert_duplicate = True
+                print(f"ℹ️  Duplicate weather entry ignored (device_id={data.get('device_id', 99)}, datetime={data.get('datetime', '')})")
+            
             return True
             
         except Exception as e:

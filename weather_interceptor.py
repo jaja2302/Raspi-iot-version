@@ -214,11 +214,14 @@ class WeatherInterceptor:
         """Save weather data to database"""
         try:
             if self.db.save_weather_data(data):
-                print(f"✅ Weather data saved: {data['datetime']}")
-                print(f"   Temp: {data['temp_out_c']:.1f}°C, Humidity: {data['humidity_out']}%")
-                print(f"   Wind: {data['windspeed_kmh']:.1f} km/h, Direction: {data['wind_direction']}°")
-                print(f"   Pressure: {data['barometric_pressure_rel_in']:.2f} inHg")
-                print("-" * 50)
+                if self.db.last_insert_duplicate:
+                    print(f"ℹ️  Duplicate data skipped for {data['datetime']} (device {data['device_id']})")
+                else:
+                    print(f"✅ Weather data saved: {data['datetime']}")
+                    print(f"   Temp: {data['temp_out_c']:.1f}°C, Humidity: {data['humidity_out']}%")
+                    print(f"   Wind: {data['windspeed_kmh']:.1f} km/h, Direction: {data['wind_direction']}°")
+                    print(f"   Pressure: {data['barometric_pressure_rel_in']:.2f} inHg")
+                    print("-" * 50)
             else:
                 print(f"❌ Failed to save weather data")
         except Exception as e:
