@@ -1,6 +1,6 @@
 {
     "device_name": "WeatherStation_RaspberryPi",
-    "device_id": 44,
+    "device_id": 99,
     "wifi_mode": "access_point",
     "ap_ssid": "WeatherStation_Pi",
     "ap_password": "weather123",

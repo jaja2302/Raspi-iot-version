@@ -24,7 +24,7 @@ class WeatherInterceptor:
         # Load settings
         self.settings_file = "data/settings.json"
         self.raspi_settings_file = "raspi_settings.json"
-        self.device_id = 44  # Default device ID
+        self.device_id = None
         
         # Load settings from files
         self.load_settings()
@@ -36,8 +36,9 @@ class WeatherInterceptor:
             if os.path.exists(self.settings_file):
                 with open(self.settings_file, 'r') as file:
                     settings_data = json.load(file)
-                    self.device_id = settings_data.get('id', 44)
-                    print(f"📋 Loaded device ID from settings: {self.device_id}")
+                    if 'id' in settings_data:
+                        self.device_id = settings_data['id']
+                        print(f"📋 Loaded device ID from settings: {self.device_id}")
             
             # Load Raspberry Pi settings
             if os.path.exists(self.raspi_settings_file):
@@ -48,8 +49,14 @@ class WeatherInterceptor:
                         self.device_id = raspi_data['device_id']
                         print(f"📋 Loaded device ID from Raspberry Pi settings: {self.device_id}")
             
+            if self.device_id is None:
+                self.device_id = 99
+                print("⚠️  Device ID not found in settings. Using fallback value: 99")
+            
         except Exception as e:
-            print(f"⚠️  Error loading settings: {e}, using default device ID: {self.device_id}")
+            if self.device_id is None:
+                self.device_id = 99
+            print(f"⚠️  Error loading settings: {e}, using device ID: {self.device_id}")
     
     def reload_settings(self):
         """Reload settings from files (useful for dynamic updates)"""

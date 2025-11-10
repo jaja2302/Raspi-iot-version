@@ -8,6 +8,27 @@ Sistem stasiun cuaca berbasis Raspberry Pi yang menerima data dari perangkat ESP
 - Manajemen proses menggunakan PM2
 - Antarmuka web untuk memantau kondisi terbaru
 
+## Persiapan Awal
+1. Pastikan username Raspberry Pi adalah `pi` dan password-nya `DA@2025`.
+2. Pastikan Raspberry Pi sudah menggunakan IP statis dan terhubung ke jaringan LAN.
+3. Buat hotspot Wi-Fi di Raspberry Pi dengan nama `iot-da` dan password `da@srs2025`.
+4. Buka terminal atau SSH, lalu clone repository ini:
+   ```bash
+   git clone https://github.com/jaja2302/Raspi-iot-version.git
+   ```
+5. Masuk ke direktori proyek:
+   ```bash
+   cd Raspi-iot-version
+   ```
+6. Pastikan Node.js, npm, dan PM2 terpasang di sistem (jika belum, install pada langkah instalasi berikutnya).
+7. Lanjutkan ke langkah instalasi Python dan konfigurasi aplikasi.
+
+## Konfigurasi Device ID
+1. Buka berkas `raspi_settings.json` dan ubah nilai `device_id` (default `99`) agar sesuai dengan device ID yang digunakan pada sistem.
+2. Masuk ke database Niaga Hosting (`u104419741_iot`), buka tabel `weather_station_list`, lalu cari atau tambahkan entri untuk device Anda.
+3. Samakan `device_id` di `raspi_settings.json` dengan kolom ID pada tabel `weather_station_list`.
+4. Simpan perubahan dan pastikan Raspberry Pi melakukan restart layanan agar konfigurasi baru digunakan.
+
 ## Prasyarat
 - Raspberry Pi dengan Raspberry Pi OS (atau distro Linux setara)
 - Python 3.10 atau lebih baru serta `pip`
@@ -19,27 +40,34 @@ Sistem stasiun cuaca berbasis Raspberry Pi yang menerima data dari perangkat ESP
 ## Instalasi
 1. Masuk atau SSH ke Raspberry Pi, kemudian pindah ke direktori proyek (clone repositori terlebih dahulu bila perlu).
 
-2. Buat virtual environment baru:
+2. Pastikan Node.js, npm, dan PM2 sudah terpasang:
+   ```bash
+   sudo apt update
+   sudo apt install -y nodejs npm
+   sudo npm install -g pm2
+   ```
+
+3. Buat virtual environment baru:
    ```bash
    python3 -m venv .venv
    ```
 
-3. Aktifkan virtual environment:
+4. Aktifkan virtual environment:
    ```bash
    source .venv/bin/activate
    ```
 
-4. Perbarui `pip` (opsional namun dianjurkan):
+5. Perbarui `pip` (opsional namun dianjurkan):
    ```bash
    pip install --upgrade pip
    ```
 
-5. Instal seluruh dependensi Python:
+6. Instal seluruh dependensi Python:
    ```bash
    pip install -r requirements.txt
    ```
 
-6. Nonaktifkan virtual environment jika sudah selesai:
+7. Nonaktifkan virtual environment jika sudah selesai:
    ```bash
    deactivate
    ```

@@ -102,7 +102,7 @@ class WeatherDatabase:
                     max_daily_gust, wh65_batt, model, passkey
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
-                data.get('device_id', 44),
+                data.get('device_id', 99),
                 data.get('datetime', ''),
                 data.get('windspeed_kmh', 0),
                 data.get('wind_direction', 0),
