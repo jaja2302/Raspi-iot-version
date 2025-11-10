@@ -43,6 +43,7 @@ Sistem stasiun cuaca berbasis Raspberry Pi yang menerima data dari perangkat ESP
 2. Pastikan Node.js, npm, dan PM2 sudah terpasang:
    ```bash
    sudo apt update
+   sudo apt install tcpdump
    sudo apt install -y nodejs npm
    sudo npm install -g pm2
    ```
