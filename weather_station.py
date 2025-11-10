@@ -267,6 +267,8 @@ def sync_data_to_server(weather_data):
         
         if response.status_code == 200:
             add_to_serial_buffer(f"Data synced to external server successfully")
+            db.mark_uploaded(weather_data.get('device_id', config.raspi_settings['device_id']),
+                             weather_data.get('datetime', ''))
             return True
         else:
             add_to_serial_buffer(f"Failed to sync data to external server: HTTP {response.status_code}")
@@ -842,6 +844,35 @@ def api_network_info():
             }
         }), 200
     except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+@app.route('/api/sync/manual', methods=['POST'])
+def api_manual_sync():
+    """Manually trigger sync for pending records"""
+    try:
+        pending_records = db.get_unsynced_data()
+        if not pending_records:
+            return jsonify({
+                "status": "success",
+                "message": "No pending data to sync"
+            }), 200
+
+        success = 0
+        failed = 0
+        for record in pending_records:
+            if sync_data_to_server(record):
+                success += 1
+            else:
+                failed += 1
+        return jsonify({
+            "status": "success" if failed == 0 else "partial",
+            "message": f"Manual sync complete. Success: {success}, Failed: {failed}"
+        }), 200
+    except Exception as e:
+        add_to_serial_buffer(f"Manual sync error: {str(e)}")
         return jsonify({
             "status": "error",
             "message": str(e)

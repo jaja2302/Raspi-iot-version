@@ -49,6 +49,7 @@ class WeatherDatabase:
                     wh65_batt REAL,
                     model TEXT,
                     passkey TEXT,
+                    uploaded INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
@@ -68,7 +69,8 @@ class WeatherDatabase:
             required_columns = {
                 'device_id': 'INTEGER NOT NULL DEFAULT 44',
                 'model': 'TEXT',
-                'passkey': 'TEXT'
+                'passkey': 'TEXT',
+                'uploaded': 'INTEGER NOT NULL DEFAULT 0'
             }
             
             # Add missing columns
@@ -159,7 +161,54 @@ class WeatherDatabase:
         finally:
             if conn:
                 conn.close()
-    
+
+    def mark_uploaded(self, device_id, datetime_str):
+        try:
+            conn = sqlite3.connect(self.db_file)
+            cursor = conn.cursor()
+            cursor.execute(
+                'UPDATE weather_data SET uploaded = 1 WHERE device_id = ? AND datetime = ?',
+                (device_id, datetime_str)
+            )
+            conn.commit()
+            conn.close()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"❌ Mark uploaded error: {e}")
+            return False
+
+    def get_unsynced_data(self, limit=100):
+        try:
+            conn = sqlite3.connect(self.db_file)
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT device_id, datetime, windspeed_kmh, wind_direction, rain_rate_in,
+                       temp_in_c, temp_out_c, humidity_in, humidity_out, uv_index,
+                       wind_gust_kmh, barometric_pressure_rel_in, barometric_pressure_abs_in,
+                       solar_radiation_wm2, daily_rain_in, rain_today_in, total_rain_in,
+                       weekly_rain_in, monthly_rain_in, yearly_rain_in, max_daily_gust,
+                       wh65_batt, model, passkey
+                FROM weather_data
+                WHERE uploaded = 0
+                ORDER BY datetime ASC
+                LIMIT ?
+            ''', (limit,))
+            rows = cursor.fetchall()
+            conn.close()
+
+            columns = [
+                'device_id', 'datetime', 'windspeed_kmh', 'wind_direction', 'rain_rate_in',
+                'temp_in_c', 'temp_out_c', 'humidity_in', 'humidity_out', 'uv_index',
+                'wind_gust_kmh', 'barometric_pressure_rel_in', 'barometric_pressure_abs_in',
+                'solar_radiation_wm2', 'daily_rain_in', 'rain_today_in', 'total_rain_in',
+                'weekly_rain_in', 'monthly_rain_in', 'yearly_rain_in', 'max_daily_gust',
+                'wh65_batt', 'model', 'passkey'
+            ]
+            return [dict(zip(columns, row)) for row in rows]
+        except Exception as e:
+            print(f"❌ Get unsynced data error: {e}")
+            return []
+
     def get_recent_data(self, limit=10):
         """Get recent weather data"""
         try:
@@ -168,7 +217,8 @@ class WeatherDatabase:
             
             cursor.execute('''
                 SELECT datetime, temp_out_c, humidity_out, windspeed_kmh, 
-                       wind_direction, barometric_pressure_rel_in, model, device_id
+                       wind_direction, barometric_pressure_rel_in, model, device_id,
+                       uploaded
                 FROM weather_data 
                 ORDER BY created_at DESC 
                 LIMIT ?

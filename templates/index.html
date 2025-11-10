@@ -297,6 +297,9 @@
         <button class="clear-logs" onclick="clearLogs()">
             🗑️ CLEAR LOGS
         </button>
+        <button class="cleanup" style="background-color: #007bff;" onclick="manualSync()">
+            🌐 SYNC TO SERVER
+        </button>
 
         <!-- File Management -->
         <h2>Data Files</h2>
@@ -332,6 +335,7 @@
                 <th>Pressure (inHg)</th>
                 <th>Model</th>
                 <th>Device ID</th>
+                <th>Status</th>
             </tr>
             {% for data in recent_data %}
             <tr>
@@ -343,6 +347,13 @@
                 <td>{{ "%.1f"|format(data[5]|float) if data[5] is not none else "N/A" }}</td>
                 <td>{{ data[6] if data[6] is not none else "N/A" }}</td>
                 <td>{{ data[7] if data[7] is not none else "N/A" }}</td>
+                <td>
+                    {% if data[8] == 1 %}
+                        ✅ Uploaded
+                    {% else %}
+                        ⏳ Pending
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </table>
@@ -520,6 +531,25 @@
                     alert('❌ Error clearing logs: ' + error.message);
                 });
             }
+        }
+
+        // Manual sync to external server
+        function manualSync() {
+            fetch('/api/sync/manual', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert((data.status === 'success' ? '✅ ' : 'ℹ️ ') + data.message);
+                location.reload();
+            })
+            .catch(error => {
+                console.error('Manual sync error:', error);
+                alert('❌ Error syncing data: ' + error.message);
+            });
         }
     </script>
 </body>
