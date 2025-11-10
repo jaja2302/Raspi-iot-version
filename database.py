@@ -92,8 +92,9 @@ class WeatherDatabase:
             print(f"[ERROR] Database init error: {e}")
             return False
     
-    def save_weather_data(self, data):
+    def save_weather_data(self, data, retry=True):
         """Save weather data to database"""
+        conn = None
         try:
             conn = sqlite3.connect(self.db_file)
             cursor = conn.cursor()
@@ -138,7 +139,6 @@ class WeatherDatabase:
             
             inserted = cursor.rowcount
             conn.commit()
-            conn.close()
             
             if inserted == 0:
                 self.last_insert_duplicate = True
@@ -146,9 +146,19 @@ class WeatherDatabase:
             
             return True
             
+        except sqlite3.OperationalError as e:
+            if retry and "no such table" in str(e):
+                print("⚠️  weather_data table missing. Reinitializing database...")
+                self.init_database()
+                return self.save_weather_data(data, retry=False)
+            print(f"❌ Save error: {e}")
+            return False
         except Exception as e:
             print(f"❌ Save error: {e}")
             return False
+        finally:
+            if conn:
+                conn.close()
     
     def get_recent_data(self, limit=10):
         """Get recent weather data"""
