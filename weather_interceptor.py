@@ -26,6 +26,10 @@ class WeatherInterceptor:
         self.raspi_settings_file = "raspi_settings.json"
         self.device_id = None
         
+        # Raw packet log file
+        self.raw_log_file = "logs/misol_raw_packets.log"
+        os.makedirs(os.path.dirname(self.raw_log_file), exist_ok=True)
+        
         # Load settings from files
         self.load_settings()
         
@@ -117,6 +121,17 @@ class WeatherInterceptor:
             if self.connected_clients:
                 print("📡 Tidak ada klien Wi-Fi terdeteksi saat ini.")
                 self.connected_clients = []
+    
+    def log_raw_packet(self, line):
+        """Write raw tcpdump line to log for debugging"""
+        try:
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            line = line.rstrip('\n')
+            with open(self.raw_log_file, 'a', encoding='utf-8') as logfile:
+                logfile.write(f"[{timestamp}] {line}\n")
+            print(f"📝 RAW: {line}")
+        except Exception as e:
+            print(f"⚠️  Unable to write raw packet log: {e}")
     
     @staticmethod
     def _is_mac_address(candidate):
@@ -237,6 +252,10 @@ class WeatherInterceptor:
                 
                 line = process.stdout.readline()
                 if line:
+                    # Record raw HTTP lines for troubleshooting
+                    if 'PASSKEY=' in line or 'GET ' in line or 'POST ' in line:
+                        self.log_raw_packet(line)
+                    
                     # Check if line contains weather data
                     if any(param in line for param in ['windspeedmph=', 'tempf=', 'humidity=', 'dateutc=']):
                         print(f"🌤️  WEATHER DATA DETECTED!")
