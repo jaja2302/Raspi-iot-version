@@ -55,6 +55,7 @@ Sistem stasiun cuaca berbasis Raspberry Pi yang menerima data dari perangkat ESP
 
 4. Aktifkan virtual environment:
    ```bash
+   cd Raspi-iot-version
    source .venv/bin/activate
    ```
 
@@ -76,6 +77,7 @@ Sistem stasiun cuaca berbasis Raspberry Pi yang menerima data dari perangkat ESP
 ## Menjalankan Aplikasi Secara Manual
 Jika ingin menjalankan tanpa PM2:
 ```bash
+cd Raspi-iot-version
 source .venv/bin/activate
 python weather_station.py
 ```
