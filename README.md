@@ -50,12 +50,12 @@ Sistem stasiun cuaca berbasis Raspberry Pi yang menerima data dari perangkat ESP
 
 3. Buat virtual environment baru:
    ```bash
+   cd Raspi-iot-version
    python3 -m venv .venv
    ```
 
 4. Aktifkan virtual environment:
    ```bash
-   cd Raspi-iot-version
    source .venv/bin/activate
    ```
 
