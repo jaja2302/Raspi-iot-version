@@ -163,18 +163,9 @@ class WeatherInterceptor:
                 else:
                     weather_data[key] = value
             
-            # Convert UTC datetime to local timezone (GMT+7)
-            utc_datetime_str = weather_data.get('dateutc', '').replace('+', ' ')
-            local_datetime_str = utc_datetime_str
-            
-            try:
-                # Parse UTC datetime
-                utc_dt = datetime.strptime(utc_datetime_str, '%Y-%m-%d %H:%M:%S')
-                # Add 7 hours for GMT+7 (Indonesia timezone)
-                local_dt = utc_dt + timedelta(hours=7)
-                local_datetime_str = local_dt.strftime('%Y-%m-%d %H:%M:%S')
-            except Exception as e:
-                print(f"⚠️  Timezone conversion error: {e}, using original time")
+            # Use current datetime from Raspberry Pi instead of Misol's datetime
+            # This ensures accurate timestamp even if Misol sends wrong date/time
+            local_datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             
             # Convert to our format
             converted_data = {
