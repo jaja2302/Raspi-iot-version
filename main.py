@@ -17,6 +17,7 @@ class WeatherSystemLauncher:
         self.weather_station_process = None
         self.weather_interceptor_process = None
         self.running = True
+        self.station_log_thread = None
         self.interceptor_log_thread = None
         
     def start_weather_station(self):
@@ -31,29 +32,33 @@ class WeatherSystemLauncher:
                     creationflags=subprocess.CREATE_NEW_CONSOLE,
                 )
             else:
-                # Linux/Raspberry Pi: Try screen first, then tmux, then background
-                if self._check_command('screen'):
-                    # Use screen to create new terminal session
-                    self.weather_station_process = subprocess.Popen([
-                        'screen', '-dmS', 'weather_station', 
-                        sys.executable, 'weather_station.py'
-                    ])
-                elif self._check_command('tmux'):
-                    # Use tmux to create new terminal session
-                    self.weather_station_process = subprocess.Popen([
-                        'tmux', 'new-session', '-d', '-s', 'weather_station',
-                        sys.executable, 'weather_station.py'
-                    ])
-                else:
-                    # Fallback: run in background with nohup
-                    self.weather_station_process = subprocess.Popen([
-                        'nohup', sys.executable, 'weather_station.py'
-                    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                # Linux/Raspberry Pi: Capture output and display in real-time
+                # Create log file for backup
+                os.makedirs('logs', exist_ok=True)
+                log_file_path = 'logs/weather_station.log'
+                
+                # Start process with captured output
+                self.weather_station_process = subprocess.Popen(
+                    [sys.executable, 'weather_station.py'],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,  # Merge stderr to stdout
+                    text=True,
+                    bufsize=1,  # Line buffered
+                    universal_newlines=True
+                )
+                
+                # Start thread to read and display output in real-time
+                self.station_log_thread = threading.Thread(
+                    target=self._read_subprocess_output_with_log,
+                    args=(self.weather_station_process, "[STATION]", log_file_path),
+                    daemon=True
+                )
+                self.station_log_thread.start()
             
             print(f"✅ Weather Station started (PID: {self.weather_station_process.pid})")
             if os.name != 'nt':
-                print("   - Use 'screen -r weather_station' to attach to Weather Station terminal")
-                print("   - Or 'tmux attach -t weather_station' if using tmux")
+                print("   - Logs will be displayed here in real-time")
+                print("   - Logs also saved to: logs/weather_station.log")
             
         except Exception as e:
             print(f"❌ Error starting Weather Station: {e}")
@@ -119,7 +124,7 @@ class WeatherSystemLauncher:
                             log_file.write(f"{timestamp} {line}")
                             log_file.flush()
         except Exception as e:
-            print(f"⚠️  Error reading interceptor output: {e}")
+            print(f"⚠️  Error reading subprocess output: {e}")
     
     def _check_command(self, command):
         """Check if a command is available on the system"""
@@ -152,18 +157,15 @@ class WeatherSystemLauncher:
                     print("⚠️  Weather Station didn't stop gracefully, forcing...")
                     self.weather_station_process.kill()
             else:
-                # Linux: kill screen/tmux sessions or process
+                # Linux: terminate process directly (no longer using screen/tmux)
                 try:
-                    if self._check_command('screen'):
-                        subprocess.run(['screen', '-S', 'weather_station', '-X', 'quit'], 
-                                     check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    elif self._check_command('tmux'):
-                        subprocess.run(['tmux', 'kill-session', '-t', 'weather_station'], 
-                                     check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    else:
-                        self.weather_station_process.terminate()
+                    self.weather_station_process.terminate()
+                    try:
                         self.weather_station_process.wait(timeout=5)
-                    print("✅ Weather Station stopped")
+                        print("✅ Weather Station stopped")
+                    except subprocess.TimeoutExpired:
+                        print("⚠️  Weather Station didn't stop gracefully, forcing...")
+                        self.weather_station_process.kill()
                 except Exception as e:
                     print(f"⚠️  Weather Station stop error: {e}")
                     if self.weather_station_process:
