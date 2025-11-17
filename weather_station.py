@@ -901,21 +901,21 @@ def get_network_info():
         try:
             # Method 1: Try iwgetid command
             result = subprocess.run(['iwgetid', '-r'], capture_output=True, text=True)
-            add_to_serial_buffer(f"DEBUG: iwgetid result: returncode={result.returncode}, output='{result.stdout.strip()}'")
+            # add_to_serial_buffer(f"DEBUG: iwgetid result: returncode={result.returncode}, output='{result.stdout.strip()}'")
             if result.returncode == 0 and result.stdout.strip():
                 wifi_ssid = result.stdout.strip()
                 wifi_mode = "client"
-                add_to_serial_buffer(f"DEBUG: Found SSID via iwgetid: {wifi_ssid}")
+                # add_to_serial_buffer(f"DEBUG: Found SSID via iwgetid: {wifi_ssid}")
             else:
                 # Method 2: Try iwconfig command
                 result = subprocess.run(['iwconfig'], capture_output=True, text=True)
-                add_to_serial_buffer(f"DEBUG: iwconfig result: returncode={result.returncode}")
+                # add_to_serial_buffer(f"DEBUG: iwconfig result: returncode={result.returncode}")
                 if result.returncode == 0:
                     lines = result.stdout.split('\n')
-                    add_to_serial_buffer(f"DEBUG: iwconfig output lines: {len(lines)}")
+                    # add_to_serial_buffer(f"DEBUG: iwconfig output lines: {len(lines)}")
                     for line in lines:
                         if 'ESSID:' in line and 'off/any' not in line:
-                            add_to_serial_buffer(f"DEBUG: Found ESSID line: {line}")
+                            # add_to_serial_buffer(f"DEBUG: Found ESSID line: {line}")
                             # Extract SSID from line like: wlan0     IEEE 802.11  ESSID:"pi-raspi"
                             if 'ESSID:"' in line:
                                 start = line.find('ESSID:"') + 7
@@ -923,7 +923,7 @@ def get_network_info():
                                 if start < end:
                                     wifi_ssid = line[start:end]
                                     wifi_mode = "client"
-                                    add_to_serial_buffer(f"DEBUG: Found SSID via iwconfig: {wifi_ssid}")
+                                    # add_to_serial_buffer(f"DEBUG: Found SSID via iwconfig: {wifi_ssid}")
                                     break
                 
                 # Method 3: Check if running as access point
@@ -959,17 +959,17 @@ def get_network_info():
                 if not wifi_ssid:
                     try:
                         result = subprocess.run(['wpa_cli', '-i', 'wlan0', 'status'], capture_output=True, text=True)
-                        add_to_serial_buffer(f"DEBUG: wpa_cli result: returncode={result.returncode}")
+                        # add_to_serial_buffer(f"DEBUG: wpa_cli result: returncode={result.returncode}")
                         if result.returncode == 0:
-                            add_to_serial_buffer(f"DEBUG: wpa_cli output: {result.stdout}")
+                            # add_to_serial_buffer(f"DEBUG: wpa_cli output: {result.stdout}")
                             for line in result.stdout.split('\n'):
                                 if line.startswith('ssid='):
                                     wifi_ssid = line.split('=', 1)[1]
                                     wifi_mode = "client"
-                                    add_to_serial_buffer(f"DEBUG: Found SSID via wpa_cli: {wifi_ssid}")
+                                    # add_to_serial_buffer(f"DEBUG: Found SSID via wpa_cli: {wifi_ssid}")
                                     break
                     except Exception as e:
-                        add_to_serial_buffer(f"DEBUG: wpa_cli error: {str(e)}")
+                        # add_to_serial_buffer(f"DEBUG: wpa_cli error: {str(e)}")
                         pass
                         
         except Exception:
@@ -987,8 +987,8 @@ def get_network_info():
         except Exception:
             pass
         
-        # Debug summary
-        add_to_serial_buffer(f"DEBUG: Network detection summary - IP: {local_ip}, SSID: {wifi_ssid}, Mode: {wifi_mode}")
+        # Debug summary (disabled to reduce log flooding)
+        # add_to_serial_buffer(f"DEBUG: Network detection summary - IP: {local_ip}, SSID: {wifi_ssid}, Mode: {wifi_mode}")
         
         return {
             'local_ip': local_ip,
