@@ -233,25 +233,25 @@ def sync_data_to_server(weather_data):
         sync_config = config.raspi_settings['external_sync']
         server_url = sync_config['server_url']
         
-        # Prepare data for external server (same format as ESP32 was sending)
+        # Prepare payload with custom key names
         sync_data = {
-            'id': weather_data.get('device_id', config.raspi_settings['device_id']),
-            'dateutc': weather_data.get('datetime', ''),
-            'windspeedmph': weather_data.get('windspeed_kmh', 0) / 1.60934,  # Convert back to mph
+            'idws': weather_data.get('device_id', config.raspi_settings['device_id']),
+            'date': weather_data.get('datetime', ''),
+            'windspeedkmh': weather_data.get('windspeed_kmh', 0),
             'winddir': weather_data.get('wind_direction', 0),
-            'rainratein': weather_data.get('rain_rate_in', 0),
-            'tempinf': weather_data.get('temp_in_c', 0) * 9.0/5.0 + 32.0,  # Convert back to Fahrenheit
-            'tempf': weather_data.get('temp_out_c', 0) * 9.0/5.0 + 32.0,    # Convert back to Fahrenheit
-            'humidityin': weather_data.get('humidity_in', 0),
-            'humidity': weather_data.get('humidity_out', 0),
+            'rain_rate': weather_data.get('rain_rate_in', 0),
+            'rain_today': weather_data.get('rain_today_in', 0),
+            'temp_in': weather_data.get('temp_in_c', 0),
+            'temp_out': weather_data.get('temp_out_c', 0),
+            'hum_in': weather_data.get('humidity_in', 0),
+            'hum_out': weather_data.get('humidity_out', 0),
             'uv': weather_data.get('uv_index', 0),
-            'windgustmph': weather_data.get('wind_gust_kmh', 0) / 1.60934,  # Convert back to mph
-            'baromrelin': weather_data.get('barometric_pressure_rel_in', 0),
-            'baromabsin': weather_data.get('barometric_pressure_abs_in', 0),
-            'solarradiation': weather_data.get('solar_radiation_wm2', 0),
+            'wind_gust': weather_data.get('wind_gust_kmh', 0),
+            'air_press_rel': weather_data.get('barometric_pressure_rel_in', 0),
+            'air_press_abs': weather_data.get('barometric_pressure_abs_in', 0),
+            'solar_radiation': weather_data.get('solar_radiation_wm2', 0),
             'dailyrainin': weather_data.get('daily_rain_in', 0),
             'raintodayin': weather_data.get('rain_today_in', 0),
-            'totalrainin': weather_data.get('total_rain_in', 0),
             'weeklyrainin': weather_data.get('weekly_rain_in', 0),
             'monthlyrainin': weather_data.get('monthly_rain_in', 0),
             'yearlyrainin': weather_data.get('yearly_rain_in', 0),
@@ -273,7 +273,7 @@ def sync_data_to_server(weather_data):
         )
         
         if response.status_code == 200:
-            add_to_serial_buffer(f"Data synced to external server successfully")
+            add_to_serial_buffer("Data synced to external server successfully")
             db.mark_uploaded(weather_data.get('device_id', config.raspi_settings['device_id']),
                              weather_data.get('datetime', ''))
             return True, sync_info
@@ -949,6 +949,33 @@ def api_sync_pending():
         }), 200
     except Exception as e:
         add_to_serial_buffer(f"Error in api_sync_pending: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+@app.route('/api/sync/reset-uploaded', methods=['POST'])
+def api_reset_uploaded_status():
+    """Reset uploaded status to 0 for all records - allows re-upload"""
+    try:
+        add_to_serial_buffer("Resetting uploaded status to 0 for all records...")
+        
+        success, count = db.reset_uploaded_status()
+        
+        if success:
+            return jsonify({
+                "status": "success",
+                "message": f"Uploaded status reset successfully - {count} records marked as pending",
+                "records_reset": count
+            }), 200
+        else:
+            return jsonify({
+                "status": "error",
+                "message": "Failed to reset uploaded status"
+            }), 500
+            
+    except Exception as e:
+        add_to_serial_buffer(f"Error resetting uploaded status: {str(e)}")
         return jsonify({
             "status": "error",
             "message": str(e)

@@ -206,6 +206,7 @@
         <div class="actions">
             <button class="primary" id="upload-btn">🚀 Upload Semua Data Pending</button>
             <button class="secondary" id="refresh-btn">🔄 Refresh Pending Info</button>
+            <button class="ghost" id="reset-uploaded-btn" style="background-color: #ffc107; color: #000; border: none;">⚠️ Reset Status Uploaded (Re-upload)</button>
             <button class="ghost" id="back-dashboard" onclick="window.location.href='/'">⬅️ Kembali ke Dashboard</button>
         </div>
 
@@ -275,6 +276,7 @@
     <script>
         const uploadBtn = document.getElementById('upload-btn');
         const refreshBtn = document.getElementById('refresh-btn');
+        const resetUploadedBtn = document.getElementById('reset-uploaded-btn');
         const pendingCountEl = document.getElementById('pending-count');
         const responseViewer = document.getElementById('response-viewer');
         const responseStatus = document.getElementById('response-status');
@@ -293,6 +295,7 @@
         function setLoading(isLoading) {
             uploadBtn.disabled = isLoading;
             refreshBtn.disabled = isLoading;
+            resetUploadedBtn.disabled = isLoading;
             uploadBtn.textContent = isLoading ? 'Uploading...' : '🚀 Upload Semua Data Pending';
         }
 
@@ -378,6 +381,38 @@
         });
 
         refreshBtn.addEventListener('click', loadPendingSummary);
+
+        resetUploadedBtn.addEventListener('click', () => {
+            if (!confirm('⚠️ PERINGATAN: Ini akan mengubah status uploaded menjadi 0 untuk SEMUA data.\n\nData yang sudah terupload akan bisa di-upload ulang lagi.\n\nLanjutkan?')) {
+                return;
+            }
+            
+            if (!confirm('Apakah Anda YAKIN? Semua record akan ditandai sebagai pending upload lagi.')) {
+                return;
+            }
+            
+            setLoading(true);
+            fetch('/api/sync/reset-uploaded', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        updateResponseStatus(data.message, false);
+                        renderResponse(data);
+                        alert('✅ ' + data.message);
+                        loadPendingSummary();
+                    } else {
+                        updateResponseStatus('Gagal reset status: ' + (data.message || ''), true);
+                        renderResponse(data);
+                        alert('❌ Error: ' + (data.message || 'Gagal reset uploaded status'));
+                    }
+                })
+                .catch(err => {
+                    renderResponse(err.message);
+                    updateResponseStatus('Gagal reset uploaded status', true);
+                    alert('❌ Error: ' + err.message);
+                })
+                .finally(() => setLoading(false));
+        });
 
         copyBtn.addEventListener('click', () => {
             const text = responseViewer.textContent;

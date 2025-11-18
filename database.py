@@ -357,5 +357,28 @@ class WeatherDatabase:
             print(f"Reset database error: {e}")
             return False, 0
 
+    def reset_uploaded_status(self):
+        """Reset uploaded status to 0 for all records - allows re-upload"""
+        try:
+            conn = sqlite3.connect(self.db_file)
+            cursor = conn.cursor()
+            
+            # Count records that are currently uploaded
+            cursor.execute('SELECT COUNT(*) FROM weather_data WHERE uploaded = 1')
+            count_uploaded = cursor.fetchone()[0]
+            
+            # Reset all uploaded status to 0
+            cursor.execute('UPDATE weather_data SET uploaded = 0 WHERE uploaded = 1')
+            
+            conn.commit()
+            conn.close()
+            
+            print(f"Uploaded status reset successfully - {count_uploaded} records marked as pending")
+            return True, count_uploaded
+            
+        except Exception as e:
+            print(f"Reset uploaded status error: {e}")
+            return False, 0
+
 # Global database instance
 db = WeatherDatabase()
