@@ -144,19 +144,19 @@ class WeatherDatabase:
             
             if inserted == 0:
                 self.last_insert_duplicate = True
-                print(f"ℹ️  Duplicate weather entry ignored (device_id={data.get('device_id', 99)}, datetime={data.get('datetime', '')})")
+                print(f"[INFO] Duplicate weather entry ignored (device_id={data.get('device_id', 99)}, datetime={data.get('datetime', '')})")
             
             return True
             
         except sqlite3.OperationalError as e:
             if retry and "no such table" in str(e):
-                print("⚠️  weather_data table missing. Reinitializing database...")
+                print("[WARN] weather_data table missing. Reinitializing database...")
                 self.init_database()
                 return self.save_weather_data(data, retry=False)
-            print(f"❌ Save error: {e}")
+            print(f"[ERROR] Save error: {e}")
             return False
         except Exception as e:
-            print(f"❌ Save error: {e}")
+            print(f"[ERROR] Save error: {e}")
             return False
         finally:
             if conn:
@@ -174,7 +174,7 @@ class WeatherDatabase:
             conn.close()
             return cursor.rowcount > 0
         except Exception as e:
-            print(f"❌ Mark uploaded error: {e}")
+            print(f"[ERROR] Mark uploaded error: {e}")
             return False
 
     def get_unsynced_data(self, limit=100):
@@ -206,7 +206,7 @@ class WeatherDatabase:
             ]
             return [dict(zip(columns, row)) for row in rows]
         except Exception as e:
-            print(f"❌ Get unsynced data error: {e}")
+            print(f"[ERROR] Get unsynced data error: {e}")
             return []
 
     def get_recent_data(self, limit=10):
@@ -229,7 +229,7 @@ class WeatherDatabase:
             return results
             
         except Exception as e:
-            print(f"❌ Get data error: {e}")
+            print(f"[ERROR] Get data error: {e}")
             return []
     
     def get_latest_data(self):
@@ -249,7 +249,7 @@ class WeatherDatabase:
             return result
             
         except Exception as e:
-            print(f"❌ Get latest data error: {e}")
+            print(f"[ERROR] Get latest data error: {e}")
             return None
     
     def get_database_info(self):
@@ -282,7 +282,7 @@ class WeatherDatabase:
             }
             
         except Exception as e:
-            print(f"❌ Get database info error: {e}")
+            print(f"[ERROR] Get database info error: {e}")
             return None
     
     def cleanup_old_data(self, days=60):
@@ -307,15 +307,15 @@ class WeatherDatabase:
                 # Vacuum database to reclaim space
                 cursor.execute('VACUUM')
                 
-                print(f"✅ Cleanup completed - {count_to_delete} old records deleted (older than {cutoff_str})")
+                print(f"Cleanup completed - {count_to_delete} old records deleted (older than {cutoff_str})")
             else:
-                print("ℹ️  No old records found to delete")
+                print("No old records found to delete")
             
             conn.close()
             return True, count_to_delete
             
         except Exception as e:
-            print(f"❌ Cleanup error: {e}")
+            print(f"Cleanup error: {e}")
             return False, 0
     
     def reset_database(self):
@@ -337,11 +337,11 @@ class WeatherDatabase:
             conn.commit()
             conn.close()
             
-            print(f"✅ Database reset successfully - {count_before} records deleted")
+            print(f"Database reset successfully - {count_before} records deleted")
             return True, count_before
             
         except Exception as e:
-            print(f"❌ Reset database error: {e}")
+            print(f"Reset database error: {e}")
             return False, 0
 
 # Global database instance
