@@ -209,6 +209,19 @@ class WeatherDatabase:
             print(f"[ERROR] Get unsynced data error: {e}")
             return []
 
+    def get_pending_count(self):
+        """Return count of weather records that have not been uploaded"""
+        try:
+            conn = sqlite3.connect(self.db_file)
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM weather_data WHERE uploaded = 0')
+            count = cursor.fetchone()[0]
+            conn.close()
+            return count
+        except Exception as e:
+            print(f"[ERROR] Get pending count error: {e}")
+            return 0
+
     def get_recent_data(self, limit=10):
         """Get recent weather data"""
         try:

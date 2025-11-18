@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Pending Data - Weather Station</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #1f2933;
+        }
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(15, 23, 42, 0.12);
+        }
+        .navbar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding: 10px 15px;
+            border-radius: 8px;
+            background: #f0f4ff;
+            border: 1px solid #d6e0ff;
+        }
+        .nav-link {
+            text-decoration: none;
+            color: #4a5568;
+            font-weight: 600;
+            padding: 8px 16px;
+            border-radius: 6px;
+            transition: background-color 0.2s, color 0.2s;
+        }
+        .nav-link:hover {
+            background-color: rgba(0, 123, 255, 0.1);
+            color: #0056b3;
+        }
+        .nav-link.active {
+            background-color: #007bff;
+            color: #fff;
+        }
+        h1 {
+            margin-top: 0;
+        }
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            padding: 16px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            box-shadow: 0 15px 35px rgba(102, 126, 234, 0.3);
+        }
+        .stat-card.secondary {
+            background: #0f172a;
+            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.35);
+        }
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.8;
+            margin-bottom: 8px;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+        }
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin: 25px 0;
+        }
+        button.primary {
+            background-color: #28a745;
+            color: #fff;
+        }
+        button.secondary {
+            background-color: #007bff;
+            color: #fff;
+        }
+        button.ghost {
+            background-color: transparent;
+            color: #555;
+            border: 1px solid #d1d5db;
+        }
+        button {
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.12);
+        }
+        .response-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+            background-color: #f8fafc;
+        }
+        .response-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .response-header h3 {
+            margin: 0;
+            font-size: 18px;
+        }
+        .response-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .response-viewer {
+            margin: 0;
+            background-color: #0f172a;
+            color: #38f9d7;
+            padding: 16px;
+            border-radius: 10px;
+            max-height: 280px;
+            overflow-y: auto;
+            font-size: 13px;
+            white-space: pre-wrap;
+        }
+        .pending-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .pending-table th, .pending-table td {
+            border: 1px solid #e5e7eb;
+            padding: 10px;
+            text-align: left;
+            font-size: 14px;
+        }
+        .pending-table th {
+            background-color: #f3f4f6;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 13px;
+            background-color: #e2e8f0;
+            color: #1f2937;
+        }
+        .badge.success {
+            background-color: #dcfce7;
+            color: #15803d;
+        }
+        .badge.error {
+            background-color: #fee2e2;
+            color: #b91c1c;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 30px;
+            color: #6b7280;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="navbar" aria-label="Main navigation">
+            <a href="/" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}">📊 Dashboard</a>
+            <a href="/upload" class="nav-link {% if active_page == 'upload' %}active{% endif %}">☁️ Upload Data</a>
+        </nav>
+        <h1>☁️ Upload Pending Weather Data</h1>
+        <p>Gunakan halaman ini untuk mengirim seluruh data yang masih pending ke server eksternal dan pantau respon API secara langsung.</p>
+
+        <div class="stat-grid">
+            <div class="stat-card">
+                <div class="stat-label">Pending Records</div>
+                <div class="stat-value" id="pending-count">{{ pending_count }}</div>
+                <div class="stat-label">Data yang belum diupload</div>
+            </div>
+            <div class="stat-card secondary">
+                <div class="stat-label">Status Terakhir</div>
+                <div class="stat-value" style="font-size: 20px;" id="response-status">Belum ada upload</div>
+                <div class="stat-label">Hasil respon sinkronisasi terakhir</div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button class="primary" id="upload-btn">🚀 Upload Semua Data Pending</button>
+            <button class="secondary" id="refresh-btn">🔄 Refresh Pending Info</button>
+            <button class="ghost" id="back-dashboard" onclick="window.location.href='/'">⬅️ Kembali ke Dashboard</button>
+        </div>
+
+        <div class="response-card">
+            <div class="response-header">
+                <h3>Raw JSON Response</h3>
+                <div class="response-actions">
+                    <button class="ghost" id="copy-response">📋 Copy</button>
+                    <button class="ghost" id="clear-response">🧹 Clear</button>
+                </div>
+            </div>
+            <pre class="response-viewer" id="response-viewer">Belum ada respon dari server...</pre>
+        </div>
+
+        <section>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <h2 style="margin:0;">Preview Data Pending</h2>
+                <span class="badge" id="preview-info">Menampilkan maksimal 10 entri</span>
+            </div>
+            <table class="pending-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Device ID</th>
+                        <th>Datetime</th>
+                        <th>Temp Out (°C)</th>
+                        <th>Humidity (%)</th>
+                        <th>Wind (km/h)</th>
+                    </tr>
+                </thead>
+                <tbody id="pending-table-body">
+                    {% if pending_preview %}
+                        {% for entry in pending_preview %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ entry.device_id }}</td>
+                            <td>{{ entry.datetime }}</td>
+                            <td>{{ "%.1f"|format(entry.temp_out_c|float) if entry.temp_out_c is not none else "N/A" }}</td>
+                            <td>{{ entry.humidity_out if entry.humidity_out is not none else "N/A" }}</td>
+                            <td>{{ "%.1f"|format(entry.windspeed_kmh|float) if entry.windspeed_kmh is not none else "N/A" }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="empty-state">🎉 Semua data sudah terupload.</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+    <script>
+        const uploadBtn = document.getElementById('upload-btn');
+        const refreshBtn = document.getElementById('refresh-btn');
+        const pendingCountEl = document.getElementById('pending-count');
+        const responseViewer = document.getElementById('response-viewer');
+        const responseStatus = document.getElementById('response-status');
+        const copyBtn = document.getElementById('copy-response');
+        const clearBtn = document.getElementById('clear-response');
+        const tableBody = document.getElementById('pending-table-body');
+        const previewInfo = document.getElementById('preview-info');
+
+        function setLoading(isLoading) {
+            uploadBtn.disabled = isLoading;
+            refreshBtn.disabled = isLoading;
+            uploadBtn.textContent = isLoading ? 'Uploading...' : '🚀 Upload Semua Data Pending';
+        }
+
+        function updateResponseStatus(status, isError = false) {
+            responseStatus.textContent = status;
+            responseStatus.classList.toggle('badge', true);
+            responseStatus.classList.toggle('success', !isError);
+            responseStatus.classList.toggle('error', isError);
+        }
+
+        function renderResponse(rawData) {
+            const formatted = typeof rawData === 'string'
+                ? rawData
+                : JSON.stringify(rawData, null, 2);
+            responseViewer.textContent = formatted;
+        }
+
+        function renderPendingTable(data) {
+            if (!data || data.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="6" class="empty-state">🎉 Semua data sudah terupload.</td></tr>';
+                return;
+            }
+
+            tableBody.innerHTML = data.map((row, idx) => `
+                <tr>
+                    <td>${idx + 1}</td>
+                    <td>${row.device_id ?? 'N/A'}</td>
+                    <td>${row.datetime ?? 'N/A'}</td>
+                    <td>${row.temp_out_c !== null && row.temp_out_c !== undefined ? Number(row.temp_out_c).toFixed(1) : 'N/A'}</td>
+                    <td>${row.humidity_out ?? 'N/A'}</td>
+                    <td>${row.windspeed_kmh !== null && row.windspeed_kmh !== undefined ? Number(row.windspeed_kmh).toFixed(1) : 'N/A'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function loadPendingSummary() {
+            setLoading(true);
+            fetch('/api/sync/pending')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        pendingCountEl.textContent = data.pending_count;
+                        renderPendingTable(data.preview);
+                        previewInfo.textContent = `Menampilkan maksimal ${data.preview_limit} entri`;
+                    } else {
+                        updateResponseStatus(data.message || 'Gagal mengambil data pending', true);
+                    }
+                })
+                .catch(err => {
+                    updateResponseStatus(err.message, true);
+                })
+                .finally(() => setLoading(false));
+        }
+
+        uploadBtn.addEventListener('click', () => {
+            setLoading(true);
+            renderResponse('Mengirim data ke server...');
+            fetch('/api/sync/manual', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+                .then(res => res.json().then(body => ({ ok: res.ok, body })))
+                .then(({ ok, body }) => {
+                    renderResponse(body);
+                    updateResponseStatus((ok ? 'Sukses' : 'Gagal') + ': ' + (body.message || ''), !ok || body.status === 'error' || body.status === 'partial');
+                    loadPendingSummary();
+                })
+                .catch(err => {
+                    renderResponse(err.message);
+                    updateResponseStatus('Gagal mengirim data', true);
+                })
+                .finally(() => setLoading(false));
+        });
+
+        refreshBtn.addEventListener('click', loadPendingSummary);
+
+        copyBtn.addEventListener('click', () => {
+            const text = responseViewer.textContent;
+            if (!text) return;
+            navigator.clipboard.writeText(text)
+                .then(() => updateResponseStatus('Response tersalin ke clipboard'))
+                .catch(() => updateResponseStatus('Gagal menyalin ke clipboard', true));
+        });
+
+        clearBtn.addEventListener('click', () => {
+            responseViewer.textContent = 'Belum ada respon dari server...';
+            updateResponseStatus('Response dibersihkan');
+        });
+
+        // Initial load
+        document.addEventListener('DOMContentLoaded', () => {
+            renderPendingTable({{ pending_preview|tojson }});
+        });
+    </script>
+</body>
+</html>
+

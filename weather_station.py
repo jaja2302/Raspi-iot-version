@@ -487,9 +487,26 @@ def handle_root():
                              settings=config.settings,
                              recent_data=recent_data,
                              files=files,
-                             connected_devices=get_connected_devices())
+                             connected_devices=get_connected_devices(),
+                             active_page='dashboard')
     except Exception as e:
         add_to_serial_buffer(f"Error in handle_root: {str(e)}")
+        return f"Error: {str(e)}", 500
+
+@app.route('/upload')
+def upload_page():
+    """Render upload data page"""
+    try:
+        pending_count = db.get_pending_count()
+        pending_preview = db.get_unsynced_data(limit=10)
+        return render_template(
+            'upload.html',
+            pending_count=pending_count,
+            pending_preview=pending_preview,
+            active_page='upload'
+        )
+    except Exception as e:
+        add_to_serial_buffer(f"Error in upload_page: {str(e)}")
         return f"Error: {str(e)}", 500
 
 @app.route('/save', methods=['POST'])
@@ -873,6 +890,26 @@ def api_manual_sync():
         }), 200
     except Exception as e:
         add_to_serial_buffer(f"Manual sync error: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+@app.route('/api/sync/pending')
+def api_sync_pending():
+    """Provide summary of pending records for UI"""
+    try:
+        limit = int(request.args.get('limit', 10))
+        pending_count = db.get_pending_count()
+        preview = db.get_unsynced_data(limit=limit)
+        return jsonify({
+            "status": "success",
+            "pending_count": pending_count,
+            "preview_limit": limit,
+            "preview": preview
+        }), 200
+    except Exception as e:
+        add_to_serial_buffer(f"Error in api_sync_pending: {str(e)}")
         return jsonify({
             "status": "error",
             "message": str(e)
