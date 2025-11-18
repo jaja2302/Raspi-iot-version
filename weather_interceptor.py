@@ -46,7 +46,7 @@ class WeatherInterceptor:
                     settings_data = json.load(file)
                     if 'id' in settings_data:
                         self.device_id = settings_data['id']
-                        print(f"📋 Loaded device ID from settings: {self.device_id}")
+                        print(f"Loaded device ID from settings: {self.device_id}")
             
             # Load Raspberry Pi settings
             if os.path.exists(self.raspi_settings_file):
@@ -55,16 +55,16 @@ class WeatherInterceptor:
                     # Use device_id from raspi_settings if available
                     if 'device_id' in raspi_data:
                         self.device_id = raspi_data['device_id']
-                        print(f"📋 Loaded device ID from Raspberry Pi settings: {self.device_id}")
+                        print(f"Loaded device ID from Raspberry Pi settings: {self.device_id}")
             
             if self.device_id is None:
                 self.device_id = 99
-                print("⚠️  Device ID not found in settings. Using fallback value: 99")
+                print("Device ID not found in settings. Using fallback value: 99")
             
         except Exception as e:
             if self.device_id is None:
                 self.device_id = 99
-            print(f"⚠️  Error loading settings: {e}, using device ID: {self.device_id}")
+            print(f"Error loading settings: {e}, using device ID: {self.device_id}")
     
     def log_connected_devices(self):
         """Detect and log Wi-Fi clients connected to the Raspberry Pi AP"""
@@ -87,7 +87,7 @@ class WeatherInterceptor:
         except FileNotFoundError:
             pass
         except Exception as e:
-            print(f"⚠️  iw scan error: {e}")
+            print(f"iw scan error: {e}")
         
         # Fallback to arp table if iw didn't return anything
         if not clients:
@@ -109,18 +109,18 @@ class WeatherInterceptor:
             except FileNotFoundError:
                 pass
             except Exception as e:
-                print(f"⚠️  arp scan error: {e}")
+                print(f"arp scan error: {e}")
         
         if clients:
             sorted_clients = sorted(clients)
             if sorted_clients != self.connected_clients:
-                print("📡 Connected Wi-Fi clients detected:")
+                print("Connected Wi-Fi clients detected:")
                 for mac in sorted_clients:
                     print(f"   - {mac}")
                 self.connected_clients = sorted_clients
         else:
             if self.connected_clients:
-                print("📡 Tidak ada klien Wi-Fi terdeteksi saat ini.")
+                print("Tidak ada klien Wi-Fi terdeteksi saat ini.")
                 self.connected_clients = []
     
     def log_raw_packet(self, line):
@@ -132,9 +132,9 @@ class WeatherInterceptor:
             line = line.rstrip('\n')
             with open(self.raw_log_file, 'a', encoding='utf-8') as logfile:
                 logfile.write(f"[{timestamp}] {line}\n")
-            print(f"📝 RAW: {line}")
+            print(f"RAW: {line}")
         except Exception as e:
-            print(f"⚠️  Unable to write raw packet log: {e}")
+            print(f"Unable to write raw packet log: {e}")
     
     @staticmethod
     def _is_mac_address(candidate):
@@ -146,7 +146,7 @@ class WeatherInterceptor:
     def reload_settings(self):
         """Reload settings from files (useful for dynamic updates)"""
         self.load_settings()
-        print(f"🔄 Settings reloaded - Device ID: {self.device_id}")
+        print(f"Settings reloaded - Device ID: {self.device_id}")
         self.log_connected_devices()
     
     def parse_weather_data(self, data_string):
@@ -198,7 +198,7 @@ class WeatherInterceptor:
             return converted_data
             
         except Exception as e:
-            print(f"❌ Parse error: {e}")
+            print(f"Parse error: {e}")
             return None
     
     def save_weather_data(self, data):
@@ -206,23 +206,23 @@ class WeatherInterceptor:
         try:
             if self.db.save_weather_data(data):
                 if self.db.last_insert_duplicate:
-                    print(f"ℹ️  Duplicate data skipped for {data['datetime']} (device {data['device_id']})")
+                    print(f"Duplicate data skipped for {data['datetime']} (device {data['device_id']})") 
                 else:
-                    print(f"✅ Weather data saved: {data['datetime']}")
+                    print(f"Weather data saved: {data['datetime']}")
                     print(f"   Temp: {data['temp_out_c']:.1f}°C, Humidity: {data['humidity_out']}%")
                     print(f"   Wind: {data['windspeed_kmh']:.1f} km/h, Direction: {data['wind_direction']}°")
                     print(f"   Pressure: {data['barometric_pressure_rel_in']:.2f} inHg")
                     print("-" * 50)
             else:
-                print(f"❌ Failed to save weather data")
+                print(f"Failed to save weather data")
         except Exception as e:
-            print(f"❌ Save error: {e}")
+            print(f"Save error: {e}")
     
     def start_intercepting(self):
         """Start intercepting weather data"""
         self.running = True
-        print("🚀 Starting Weather Data Interceptor...")
-        print(f"📋 Using Device ID: {self.device_id}")
+        print("Starting Weather Data Interceptor...")
+        print(f"Using Device ID: {self.device_id}")
         print("Monitoring for Misol HP2550 data...")
         print("Press Ctrl+C to stop")
         print("=" * 60)
@@ -255,7 +255,7 @@ class WeatherInterceptor:
                     
                     # Check if line contains weather data
                     if any(param in line for param in ['windspeedmph=', 'tempf=', 'humidity=', 'dateutc=']):
-                        print(f"🌤️  WEATHER DATA DETECTED!")
+                        print(f"WEATHER DATA DETECTED!")
                         print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
                         
                         # Extract data from line
@@ -271,9 +271,9 @@ class WeatherInterceptor:
                                     self.save_weather_data(weather_data)
                 
         except KeyboardInterrupt:
-            print("\n🛑 Interceptor stopped by user")
+            print("Interceptor stopped by user")
         except Exception as e:
-            print(f"❌ Interceptor error: {e}")
+            print(f"Interceptor error: {e}")
         finally:
             self.running = False
             if 'process' in locals():
@@ -285,7 +285,7 @@ class WeatherInterceptor:
             results = self.db.get_recent_data(10)
             
             if results:
-                print("\n📊 Recent Weather Data:")
+                print("\nRecent Weather Data:")
                 print("=" * 80)
                 for row in results:
                     print(f"Time: {row[0]}")
@@ -297,7 +297,7 @@ class WeatherInterceptor:
                 print("No weather data found yet")
                 
         except Exception as e:
-            print(f"❌ Show data error: {e}")
+            print(f"Show data error: {e}")
 
 def main():
     import sys
@@ -313,7 +313,7 @@ def main():
         elif sys.argv[1] in ['-d', '--data', 'data']:
             show_data_only = True
         elif sys.argv[1] in ['-h', '--help', 'help']:
-            print("🌤️  Misol HP2550 Weather Data Interceptor")
+            print("Misol HP2550 Weather Data Interceptor")
             print("=" * 50)
             print("Usage:")
             print("  python weather_interceptor.py           # Interactive mode")
@@ -325,19 +325,19 @@ def main():
     # Check if running in PM2 auto mode
     import os
     if os.getenv('INTERCEPTOR_MODE') == 'auto' or auto_mode:
-        print("🌤️  Misol HP2550 Weather Data Interceptor (Auto Mode)")
+        print("Misol HP2550 Weather Data Interceptor (Auto Mode)")
         print("=" * 60)
         print("Auto-starting intercepting mode...")
         interceptor.start_intercepting()
     elif show_data_only:
-        print("🌤️  Misol HP2550 Weather Data Interceptor (Data Mode)")
+        print("Misol HP2550 Weather Data Interceptor (Data Mode)")
         print("=" * 60)
         interceptor.show_recent_data()
     else:
         # Default behavior: start intercepting directly
-        print("🌤️  Misol HP2550 Weather Data Interceptor")
+        print("Misol HP2550 Weather Data Interceptor")
         print("=" * 50)
-        print(f"📋 Current Device ID: {interceptor.device_id}")
+        print(f"Current Device ID: {interceptor.device_id}")
         print("Starting network sniffing automatically...")
         print("Press Ctrl+C to stop")
         print("=" * 50)
