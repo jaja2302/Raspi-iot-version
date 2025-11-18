@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Misol HP2550 Local Server
 Menerima data langsung dari Misol tanpa perlu tcpdump
@@ -10,6 +11,7 @@ from datetime import datetime
 from database import WeatherDatabase
 import json
 import os
+import platform
 
 class MisolHandler(BaseHTTPRequestHandler):
     # Share database instance
@@ -25,9 +27,9 @@ class MisolHandler(BaseHTTPRequestHandler):
                 
                 # Check if this is weather data
                 if any(param in query_string for param in ['windspeedmph=', 'tempf=', 'humidity=']):
-                    print(f"\n🌤️  WEATHER DATA RECEIVED!")
-                    print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                    print(f"From: {self.client_address[0]}")
+                    print("\n[WEATHER] Data received!")
+                    print("Time: {}".format(datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+                    print("From: {}".format(self.client_address[0]))
                     
                     # Parse and save weather data
                     weather_data = self.parse_weather_data(query_string)
@@ -41,7 +43,7 @@ class MisolHandler(BaseHTTPRequestHandler):
             self.wfile.write(b'success\n')
             
         except Exception as e:
-            print(f"❌ Error handling request: {e}")
+            print("[ERROR] Error handling request: {}".format(e))
             self.send_error(500)
     
     def do_POST(self):
@@ -96,7 +98,7 @@ class MisolHandler(BaseHTTPRequestHandler):
             return converted_data
             
         except Exception as e:
-            print(f"❌ Parse error: {e}")
+            print("[ERROR] Parse error: {}".format(e))
             return None
     
     def save_weather_data(self, data):
@@ -104,17 +106,20 @@ class MisolHandler(BaseHTTPRequestHandler):
         try:
             if self.db.save_weather_data(data):
                 if self.db.last_insert_duplicate:
-                    print(f"ℹ️  Duplicate data skipped")
+                    print("[INFO] Duplicate data skipped")
                 else:
-                    print(f"✅ Weather data saved!")
-                    print(f"   Temp: {data['temp_out_c']:.1f}°C, Humidity: {data['humidity_out']}%")
-                    print(f"   Wind: {data['windspeed_kmh']:.1f} km/h, Direction: {data['wind_direction']}°")
-                    print(f"   Pressure: {data['barometric_pressure_rel_in']:.2f} inHg")
+                    print("[SUCCESS] Weather data saved!")
+                    print("   Temp: {:.1f}C, Humidity: {}%".format(
+                        data['temp_out_c'], data['humidity_out']))
+                    print("   Wind: {:.1f} km/h, Direction: {}deg".format(
+                        data['windspeed_kmh'], data['wind_direction']))
+                    print("   Pressure: {:.2f} inHg".format(
+                        data['barometric_pressure_rel_in']))
                     print("-" * 50)
             else:
-                print(f"❌ Failed to save weather data")
+                print("[ERROR] Failed to save weather data")
         except Exception as e:
-            print(f"❌ Save error: {e}")
+            print("[ERROR] Save error: {}".format(e))
     
     def log_message(self, format, *args):
         """Override to suppress default logging"""
@@ -131,10 +136,10 @@ def load_device_id():
                 data = json.load(f)
                 if 'device_id' in data:
                     device_id = data['device_id']
-                    print(f"📋 Device ID from raspi_settings.json: {device_id}")
+                    print("[CONFIG] Device ID from raspi_settings.json: {}".format(device_id))
                     return device_id
         except Exception as e:
-            print(f"⚠️  Error reading raspi_settings.json: {e}")
+            print("[WARNING] Error reading raspi_settings.json: {}".format(e))
     
     # Fallback to data/settings.json
     if os.path.exists('data/settings.json'):
@@ -143,16 +148,18 @@ def load_device_id():
                 data = json.load(f)
                 if 'id' in data:
                     device_id = data['id']
-                    print(f"📋 Device ID from settings.json: {device_id}")
+                    print("[CONFIG] Device ID from settings.json: {}".format(device_id))
                     return device_id
         except Exception as e:
-            print(f"⚠️  Error reading settings.json: {e}")
+            print("[WARNING] Error reading settings.json: {}".format(e))
     
-    print(f"📋 Using default device ID: {device_id}")
+    print("[CONFIG] Using default device ID: {}".format(device_id))
     return device_id
 
 def main():
-    print("🌤️  Misol HP2550 Local Server")
+    import sys
+    
+    print("Misol HP2550 Local Server")
     print("=" * 60)
     
     # Initialize database
@@ -166,20 +173,34 @@ def main():
     MisolHandler.db = db
     MisolHandler.device_id = device_id
     
+    # Determine port (default 8080 for development, 80 for production)
+    port = 8080  # Default untuk testing/Windows
+    if len(sys.argv) > 1:
+        try:
+            port = int(sys.argv[1])
+        except:
+            pass
+    
+    # Check if running on Raspberry Pi (Linux)
+    if platform.system() == 'Linux' and port == 8080:
+        port = 80  # Auto gunakan port 80 di Linux
+    
     # Create server
-    server_address = ('0.0.0.0', 80)
+    server_address = ('0.0.0.0', port)
     httpd = HTTPServer(server_address, MisolHandler)
     
-    print(f"🚀 Server started on port 80")
-    print(f"📋 Device ID: {device_id}")
-    print(f"🌐 Listening for Misol HP2550 data...")
+    print("[SERVER] Started on port {}".format(port))
+    print("[CONFIG] Device ID: {}".format(device_id))
+    print("[INFO] Listening for Misol HP2550 data...")
+    if port != 80:
+        print("[TEST] URL: http://localhost:{}/?tempf=75&humidity=60&windspeedmph=5".format(port))
     print("Press Ctrl+C to stop")
     print("=" * 60)
     
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
-        print("\n🛑 Server stopped by user")
+        print("\n[INFO] Server stopped by user")
     finally:
         httpd.server_close()
 
