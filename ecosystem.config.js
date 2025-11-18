@@ -27,7 +27,7 @@ module.exports = {
     },
     {
       name: 'weather-interceptor',
-      script: '/home/pi/Raspi-iot-version/weather_interceptor.py',
+      script: '/home/pi/Raspi-iot-version/misol_hybrid.py',
       interpreter: '/home/pi/Raspi-iot-version/.venv/bin/python',
       cwd: '/home/pi/Raspi-iot-version',
       instances: 1,

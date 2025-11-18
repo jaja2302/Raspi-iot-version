@@ -121,6 +121,7 @@ sudo pm2 save
 - Jika perangkat Misol terhubung ke hotspot namun tidak ada data yang masuk, pastikan Raspberry Pi memiliki paket `tcpdump`:
   ```bash
   sudo apt update
+  sudo apt-get install iptables -y
   sudo apt install tcpdump
   ```
 - Temukan IP perangkat Misol melalui tabel ARP:
