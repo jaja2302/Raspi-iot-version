@@ -218,77 +218,114 @@ def check_internet_connection():
         except OSError:
             return False
 
-def sync_data_to_server(weather_data):
-    """Sync weather data to external server if internet is available"""
+def prepare_sync_payload(weather_data):
+    """Prepare weather data payload for external server"""
+    return {
+        'idws': weather_data.get('device_id', config.raspi_settings['device_id']),
+        'date': weather_data.get('datetime', ''),
+        'windspeedkmh': weather_data.get('windspeed_kmh', 0),
+        'winddir': weather_data.get('wind_direction', 0),
+        'rain_rate': weather_data.get('rain_rate_in', 0),
+        'rain_today': weather_data.get('rain_today_in', 0),
+        'temp_in': weather_data.get('temp_in_c', 0),
+        'temp_out': weather_data.get('temp_out_c', 0),
+        'hum_in': weather_data.get('humidity_in', 0),
+        'hum_out': weather_data.get('humidity_out', 0),
+        'uv': weather_data.get('uv_index', 0),
+        'wind_gust': weather_data.get('wind_gust_kmh', 0),
+        'air_press_rel': weather_data.get('barometric_pressure_rel_in', 0),
+        'air_press_abs': weather_data.get('barometric_pressure_abs_in', 0),
+        'solar_radiation': weather_data.get('solar_radiation_wm2', 0),
+        'dailyrainin': weather_data.get('daily_rain_in', 0),
+        'raintodayin': weather_data.get('rain_today_in', 0),
+        'weeklyrainin': weather_data.get('weekly_rain_in', 0),
+        'monthlyrainin': weather_data.get('monthly_rain_in', 0),
+        'yearlyrainin': weather_data.get('yearly_rain_in', 0),
+        'maxdailygust': weather_data.get('max_daily_gust', 0),
+        'wh65batt': weather_data.get('wh65_batt', 0)
+    }
+
+def sync_data_to_server(weather_data_list):
+    """Sync weather data to external server (supports single data or bulk insert)
+    
+    Args:
+        weather_data_list: Single dict or list of dicts containing weather data
+    
+    Returns:
+        tuple: (success: bool, sync_info: dict)
+    """
     if not config.raspi_settings['external_sync']['enabled']:
         return False, None
     
+    # Ensure weather_data_list is a list
+    if isinstance(weather_data_list, dict):
+        weather_data_list = [weather_data_list]
+    
     if not check_internet_connection():
-        # Add to sync queue for later
-        config.sync_queue.append(weather_data.copy())
-        add_to_serial_buffer(f"No internet connection. Data queued for sync (queue size: {len(config.sync_queue)})")
+        # Add all to sync queue for later
+        for data in weather_data_list:
+            config.sync_queue.append(data.copy())
+        add_to_serial_buffer(f"No internet connection. {len(weather_data_list)} data queued for sync (queue size: {len(config.sync_queue)})")
         return False, None
     
     try:
         sync_config = config.raspi_settings['external_sync']
         server_url = sync_config['server_url']
         
-        # Prepare payload with custom key names
-        sync_data = {
-            'idws': weather_data.get('device_id', config.raspi_settings['device_id']),
-            'date': weather_data.get('datetime', ''),
-            'windspeedkmh': weather_data.get('windspeed_kmh', 0),
-            'winddir': weather_data.get('wind_direction', 0),
-            'rain_rate': weather_data.get('rain_rate_in', 0),
-            'rain_today': weather_data.get('rain_today_in', 0),
-            'temp_in': weather_data.get('temp_in_c', 0),
-            'temp_out': weather_data.get('temp_out_c', 0),
-            'hum_in': weather_data.get('humidity_in', 0),
-            'hum_out': weather_data.get('humidity_out', 0),
-            'uv': weather_data.get('uv_index', 0),
-            'wind_gust': weather_data.get('wind_gust_kmh', 0),
-            'air_press_rel': weather_data.get('barometric_pressure_rel_in', 0),
-            'air_press_abs': weather_data.get('barometric_pressure_abs_in', 0),
-            'solar_radiation': weather_data.get('solar_radiation_wm2', 0),
-            'dailyrainin': weather_data.get('daily_rain_in', 0),
-            'raintodayin': weather_data.get('rain_today_in', 0),
-            'weeklyrainin': weather_data.get('weekly_rain_in', 0),
-            'monthlyrainin': weather_data.get('monthly_rain_in', 0),
-            'yearlyrainin': weather_data.get('yearly_rain_in', 0),
-            'maxdailygust': weather_data.get('max_daily_gust', 0),
-            'wh65batt': weather_data.get('wh65_batt', 0)
-        }
+        # Prepare payload(s) - support bulk insert
+        sync_data_list = [prepare_sync_payload(data) for data in weather_data_list]
         
-        # Store sync info for return
+        if len(weather_data_list) == 1:
+            # Single data - send as single object for backward compatibility
+            payload_to_send = sync_data_list[0]
+        else:
+            # Bulk insert - send as array
+            payload_to_send = sync_data_list
+        
+        # Store sync info for return (use first record for display)
         sync_info = {
             'url': server_url,
-            'payload': sync_data.copy()
+            'payload': sync_data_list[0] if len(weather_data_list) > 0 else {},
+            'bulk_count': len(weather_data_list)
         }
         
-        # Send to external server
+        # Send to external server as JSON
         response = requests.post(
             server_url,
-            data=sync_data,
+            json=payload_to_send,  # Send as JSON
+            headers={'Content-Type': 'application/json'},
             timeout=sync_config['timeout_seconds']
         )
         
         if response.status_code == 200:
-            add_to_serial_buffer("Data synced to external server successfully")
-            db.mark_uploaded(weather_data.get('device_id', config.raspi_settings['device_id']),
-                             weather_data.get('datetime', ''))
+            success_count = len(weather_data_list)
+            add_to_serial_buffer(f"Data synced to external server successfully ({success_count} records)")
+            
+            # Mark all as uploaded
+            for weather_data in weather_data_list:
+                db.mark_uploaded(
+                    weather_data.get('device_id', config.raspi_settings['device_id']),
+                    weather_data.get('datetime', '')
+                )
+            
             return True, sync_info
         else:
             add_to_serial_buffer(f"Failed to sync data to external server: HTTP {response.status_code}")
-            config.sync_queue.append(weather_data.copy())
+            # Add all to sync queue for retry
+            for data in weather_data_list:
+                config.sync_queue.append(data.copy())
             return False, sync_info
             
     except Exception as e:
         add_to_serial_buffer(f"Error syncing data to external server: {str(e)}")
-        config.sync_queue.append(weather_data.copy())
+        # Add all to sync queue for retry
+        for data in weather_data_list:
+            config.sync_queue.append(data.copy())
         sync_info = {
             'url': config.raspi_settings['external_sync'].get('server_url', 'Unknown'),
-            'payload': sync_data if 'sync_data' in locals() else {},
-            'error': str(e)
+            'payload': prepare_sync_payload(weather_data_list[0]) if weather_data_list else {},
+            'error': str(e),
+            'bulk_count': len(weather_data_list)
         }
         return False, sync_info
 
@@ -309,12 +346,15 @@ def process_sync_queue():
     queue_copy = config.sync_queue.copy()
     config.sync_queue.clear()
     
-    for weather_data in queue_copy:
-        success, _ = sync_data_to_server(weather_data)
+    # Send in bulk for efficiency (process in chunks of 50 to avoid timeout)
+    chunk_size = 50
+    for i in range(0, len(queue_copy), chunk_size):
+        chunk = queue_copy[i:i + chunk_size]
+        success, _ = sync_data_to_server(chunk)
         if success:
-            successful_syncs += 1
+            successful_syncs += len(chunk)
         else:
-            failed_syncs += 1
+            failed_syncs += len(chunk)
     
     add_to_serial_buffer(f"Sync queue processed: {successful_syncs} successful, {failed_syncs} failed")
     
@@ -415,7 +455,7 @@ def save_weather_data(data):
         
         add_to_serial_buffer("Weather data saved successfully")
         
-        # Try to sync data to external server if internet is available
+        # Try to sync data to external server if internet is available (single record)
         sync_data_to_server(data)[0]  # Ignore return value for background sync
         
         return True
@@ -881,7 +921,7 @@ def api_network_info():
 
 @app.route('/api/sync/manual', methods=['POST'])
 def api_manual_sync():
-    """Manually trigger sync for pending records"""
+    """Manually trigger sync for pending records (bulk insert)"""
     try:
         pending_records = db.get_unsynced_data()
         if not pending_records:
@@ -890,40 +930,42 @@ def api_manual_sync():
                 "message": "No pending data to sync"
             }), 200
 
-        success = 0
-        failed = 0
-        sync_details = []
-        
         # Get sync config info
         sync_config = config.raspi_settings.get('external_sync', {})
         server_url = sync_config.get('server_url', 'Unknown')
         
-        for record in pending_records:
-            sync_success, sync_info = sync_data_to_server(record)
-            if sync_success:
-                success += 1
-            else:
-                failed += 1
+        # Send all pending records in one bulk request
+        sync_success, sync_info = sync_data_to_server(pending_records)
+        
+        if sync_success:
+            success_count = len(pending_records)
+            response_data = {
+                "status": "success",
+                "message": f"Manual sync complete. Success: {success_count}, Failed: 0",
+                "success_count": success_count,
+                "failed_count": 0
+            }
+        else:
+            # Check how many were marked as uploaded
+            remaining_count = db.get_pending_count()
+            success_count = len(pending_records) - remaining_count
+            failed_count = remaining_count
             
-            # Collect sync info (use first record's info for display)
-            if not sync_details and sync_info:
-                sync_details.append(sync_info)
+            response_data = {
+                "status": "partial" if success_count > 0 else "error",
+                "message": f"Manual sync complete. Success: {success_count}, Failed: {failed_count}",
+                "success_count": success_count,
+                "failed_count": failed_count
+            }
         
-        response_data = {
-            "status": "success" if failed == 0 else "partial",
-            "message": f"Manual sync complete. Success: {success}, Failed: {failed}",
-            "success_count": success,
-            "failed_count": failed
-        }
-        
-        # Add payload and URL info from first sync attempt
-        if sync_details:
-            first_sync = sync_details[0]
+        # Add payload and URL info for display
+        if sync_info:
             response_data['sync_info'] = {
-                'target_url': first_sync.get('url', server_url),
-                'payload': first_sync.get('payload', {}),
+                'target_url': sync_info.get('url', server_url),
+                'payload': sync_info.get('payload', {}),
                 'method': 'POST',
-                'content_type': 'application/x-www-form-urlencoded'
+                'content_type': 'application/json',
+                'bulk_count': sync_info.get('bulk_count', len(pending_records))
             }
         
         return jsonify(response_data), 200
