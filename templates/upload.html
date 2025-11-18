@@ -213,11 +213,25 @@
             <div class="response-header">
                 <h3>Raw JSON Response</h3>
                 <div class="response-actions">
-                    <button class="ghost" id="copy-response">📋 Copy</button>
+                    <button class="ghost" id="copy-response">📋 Copy Response</button>
+                    <button class="ghost" id="copy-payload">📦 Copy Payload</button>
                     <button class="ghost" id="clear-response">🧹 Clear</button>
                 </div>
             </div>
             <pre class="response-viewer" id="response-viewer">Belum ada respon dari server...</pre>
+        </div>
+
+        <div class="response-card" id="payload-card" style="display: none;">
+            <div class="response-header">
+                <h3>Request Payload & URL</h3>
+            </div>
+            <div style="margin-bottom: 12px;">
+                <strong>Target URL:</strong> <span id="payload-url" style="font-family: monospace; color: #007bff;"></span>
+            </div>
+            <div style="margin-bottom: 12px;">
+                <strong>Method:</strong> <span id="payload-method" style="font-family: monospace;"></span>
+            </div>
+            <pre class="response-viewer" id="payload-viewer" style="max-height: 200px;">Belum ada payload...</pre>
         </div>
 
         <section>
@@ -265,9 +279,16 @@
         const responseViewer = document.getElementById('response-viewer');
         const responseStatus = document.getElementById('response-status');
         const copyBtn = document.getElementById('copy-response');
+        const copyPayloadBtn = document.getElementById('copy-payload');
         const clearBtn = document.getElementById('clear-response');
         const tableBody = document.getElementById('pending-table-body');
         const previewInfo = document.getElementById('preview-info');
+        const payloadCard = document.getElementById('payload-card');
+        const payloadViewer = document.getElementById('payload-viewer');
+        const payloadUrl = document.getElementById('payload-url');
+        const payloadMethod = document.getElementById('payload-method');
+        
+        let lastPayloadData = null;
 
         function setLoading(isLoading) {
             uploadBtn.disabled = isLoading;
@@ -329,16 +350,29 @@
         uploadBtn.addEventListener('click', () => {
             setLoading(true);
             renderResponse('Mengirim data ke server...');
+            payloadCard.style.display = 'none';
+            
             fetch('/api/sync/manual', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
                 .then(res => res.json().then(body => ({ ok: res.ok, body })))
                 .then(({ ok, body }) => {
                     renderResponse(body);
                     updateResponseStatus((ok ? 'Sukses' : 'Gagal') + ': ' + (body.message || ''), !ok || body.status === 'error' || body.status === 'partial');
+                    
+                    // Display payload info if available
+                    if (body.sync_info) {
+                        lastPayloadData = body.sync_info;
+                        payloadUrl.textContent = body.sync_info.target_url || 'Unknown';
+                        payloadMethod.textContent = body.sync_info.method || 'POST';
+                        payloadViewer.textContent = JSON.stringify(body.sync_info.payload, null, 2);
+                        payloadCard.style.display = 'block';
+                    }
+                    
                     loadPendingSummary();
                 })
                 .catch(err => {
                     renderResponse(err.message);
                     updateResponseStatus('Gagal mengirim data', true);
+                    payloadCard.style.display = 'none';
                 })
                 .finally(() => setLoading(false));
         });
@@ -351,6 +385,23 @@
             navigator.clipboard.writeText(text)
                 .then(() => updateResponseStatus('Response tersalin ke clipboard'))
                 .catch(() => updateResponseStatus('Gagal menyalin ke clipboard', true));
+        });
+
+        copyPayloadBtn.addEventListener('click', () => {
+            if (!lastPayloadData) {
+                updateResponseStatus('Belum ada payload untuk dicopy', true);
+                return;
+            }
+            
+            const payloadText = JSON.stringify({
+                url: lastPayloadData.target_url,
+                method: lastPayloadData.method || 'POST',
+                payload: lastPayloadData.payload
+            }, null, 2);
+            
+            navigator.clipboard.writeText(payloadText)
+                .then(() => updateResponseStatus('Payload tersalin ke clipboard'))
+                .catch(() => updateResponseStatus('Gagal menyalin payload', true));
         });
 
         clearBtn.addEventListener('click', () => {

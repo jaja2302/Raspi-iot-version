@@ -221,16 +221,17 @@ def check_internet_connection():
 def sync_data_to_server(weather_data):
     """Sync weather data to external server if internet is available"""
     if not config.raspi_settings['external_sync']['enabled']:
-        return False
+        return False, None
     
     if not check_internet_connection():
         # Add to sync queue for later
         config.sync_queue.append(weather_data.copy())
         add_to_serial_buffer(f"No internet connection. Data queued for sync (queue size: {len(config.sync_queue)})")
-        return False
+        return False, None
     
     try:
         sync_config = config.raspi_settings['external_sync']
+        server_url = sync_config['server_url']
         
         # Prepare data for external server (same format as ESP32 was sending)
         sync_data = {
@@ -258,9 +259,15 @@ def sync_data_to_server(weather_data):
             'wh65batt': weather_data.get('wh65_batt', 0)
         }
         
+        # Store sync info for return
+        sync_info = {
+            'url': server_url,
+            'payload': sync_data.copy()
+        }
+        
         # Send to external server
         response = requests.post(
-            sync_config['server_url'],
+            server_url,
             data=sync_data,
             timeout=sync_config['timeout_seconds']
         )
@@ -269,16 +276,21 @@ def sync_data_to_server(weather_data):
             add_to_serial_buffer(f"Data synced to external server successfully")
             db.mark_uploaded(weather_data.get('device_id', config.raspi_settings['device_id']),
                              weather_data.get('datetime', ''))
-            return True
+            return True, sync_info
         else:
             add_to_serial_buffer(f"Failed to sync data to external server: HTTP {response.status_code}")
             config.sync_queue.append(weather_data.copy())
-            return False
+            return False, sync_info
             
     except Exception as e:
         add_to_serial_buffer(f"Error syncing data to external server: {str(e)}")
         config.sync_queue.append(weather_data.copy())
-        return False
+        sync_info = {
+            'url': config.raspi_settings['external_sync'].get('server_url', 'Unknown'),
+            'payload': sync_data if 'sync_data' in locals() else {},
+            'error': str(e)
+        }
+        return False, sync_info
 
 def process_sync_queue():
     """Process queued data when internet becomes available"""
@@ -298,7 +310,8 @@ def process_sync_queue():
     config.sync_queue.clear()
     
     for weather_data in queue_copy:
-        if sync_data_to_server(weather_data):
+        success, _ = sync_data_to_server(weather_data)
+        if success:
             successful_syncs += 1
         else:
             failed_syncs += 1
@@ -403,7 +416,7 @@ def save_weather_data(data):
         add_to_serial_buffer("Weather data saved successfully")
         
         # Try to sync data to external server if internet is available
-        sync_data_to_server(data)
+        sync_data_to_server(data)[0]  # Ignore return value for background sync
         
         return True
         
@@ -879,15 +892,41 @@ def api_manual_sync():
 
         success = 0
         failed = 0
+        sync_details = []
+        
+        # Get sync config info
+        sync_config = config.raspi_settings.get('external_sync', {})
+        server_url = sync_config.get('server_url', 'Unknown')
+        
         for record in pending_records:
-            if sync_data_to_server(record):
+            sync_success, sync_info = sync_data_to_server(record)
+            if sync_success:
                 success += 1
             else:
                 failed += 1
-        return jsonify({
+            
+            # Collect sync info (use first record's info for display)
+            if not sync_details and sync_info:
+                sync_details.append(sync_info)
+        
+        response_data = {
             "status": "success" if failed == 0 else "partial",
-            "message": f"Manual sync complete. Success: {success}, Failed: {failed}"
-        }), 200
+            "message": f"Manual sync complete. Success: {success}, Failed: {failed}",
+            "success_count": success,
+            "failed_count": failed
+        }
+        
+        # Add payload and URL info from first sync attempt
+        if sync_details:
+            first_sync = sync_details[0]
+            response_data['sync_info'] = {
+                'target_url': first_sync.get('url', server_url),
+                'payload': first_sync.get('payload', {}),
+                'method': 'POST',
+                'content_type': 'application/x-www-form-urlencoded'
+            }
+        
+        return jsonify(response_data), 200
     except Exception as e:
         add_to_serial_buffer(f"Manual sync error: {str(e)}")
         return jsonify({
