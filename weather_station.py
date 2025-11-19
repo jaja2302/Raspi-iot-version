@@ -129,6 +129,7 @@ class Config:
         # Watchdog
         self.watchdog_timer = 0
         self.last_activity = time.time()
+        self.auto_sync_in_progress = False  # Flag to prevent concurrent syncs
 
 config = Config()
 
@@ -210,13 +211,16 @@ def check_internet_connection():
         # Try to connect to Google DNS
         socket.create_connection(("8.8.8.8", 53), timeout=5)
         return True
-    except OSError:
+    except (OSError, socket.timeout, socket.gaierror) as e:
         try:
             # Fallback: try Cloudflare DNS
             socket.create_connection(("1.1.1.1", 53), timeout=5)
             return True
-        except OSError:
+        except (OSError, socket.timeout, socket.gaierror):
             return False
+    except Exception as e:
+        # Catch any other unexpected errors
+        return False
 
 def prepare_sync_payload(weather_data):
     """Prepare weather data payload for external server"""
@@ -261,17 +265,36 @@ def sync_data_to_server(weather_data_list):
     if isinstance(weather_data_list, dict):
         weather_data_list = [weather_data_list]
     
-    if not check_internet_connection():
-        # Add all to sync queue for later
-        for data in weather_data_list:
-            config.sync_queue.append(data.copy())
-        add_to_serial_buffer(f"No internet connection. {len(weather_data_list)} data queued for sync (queue size: {len(config.sync_queue)})")
+    if not weather_data_list:
         return False, None
     
+    # Check internet connection first
     try:
-        sync_config = config.raspi_settings['external_sync']
-        server_url = sync_config['server_url']
-        
+        if not check_internet_connection():
+            # Add all to sync queue for later
+            for data in weather_data_list:
+                config.sync_queue.append(data.copy())
+            add_to_serial_buffer(f"No internet connection. {len(weather_data_list)} data queued for sync (queue size: {len(config.sync_queue)})")
+            return False, None
+    except Exception as e:
+        add_to_serial_buffer(f"Error checking internet connection: {str(e)}")
+        # Add all to sync queue for retry
+        for data in weather_data_list:
+            config.sync_queue.append(data.copy())
+        return False, None
+    
+    sync_config = config.raspi_settings['external_sync']
+    server_url = sync_config.get('server_url', 'Unknown')
+    timeout_seconds = sync_config.get('timeout_seconds', 30)
+    
+    # Store sync info for return (use first record for display)
+    sync_info = {
+        'url': server_url,
+        'payload': {},
+        'bulk_count': len(weather_data_list)
+    }
+    
+    try:
         # Prepare payload(s) - support bulk insert
         sync_data_list = [prepare_sync_payload(data) for data in weather_data_list]
         
@@ -282,19 +305,14 @@ def sync_data_to_server(weather_data_list):
             # Bulk insert - send as array
             payload_to_send = sync_data_list
         
-        # Store sync info for return (use first record for display)
-        sync_info = {
-            'url': server_url,
-            'payload': sync_data_list[0] if len(weather_data_list) > 0 else {},
-            'bulk_count': len(weather_data_list)
-        }
+        sync_info['payload'] = sync_data_list[0] if len(weather_data_list) > 0 else {}
         
         # Send to external server as JSON
         response = requests.post(
             server_url,
             json=payload_to_send,  # Send as JSON
             headers={'Content-Type': 'application/json'},
-            timeout=sync_config['timeout_seconds']
+            timeout=timeout_seconds
         )
         
         if response.status_code == 200:
@@ -302,31 +320,64 @@ def sync_data_to_server(weather_data_list):
             add_to_serial_buffer(f"Data synced to external server successfully ({success_count} records)")
             
             # Mark all as uploaded
-            for weather_data in weather_data_list:
-                db.mark_uploaded(
-                    weather_data.get('device_id', config.raspi_settings['device_id']),
-                    weather_data.get('datetime', '')
-                )
+            try:
+                for weather_data in weather_data_list:
+                    db.mark_uploaded(
+                        weather_data.get('device_id', config.raspi_settings['device_id']),
+                        weather_data.get('datetime', '')
+                    )
+            except Exception as db_error:
+                add_to_serial_buffer(f"Warning: Failed to mark records as uploaded in database: {str(db_error)}")
+                # Continue anyway since server accepted the data
             
             return True, sync_info
         else:
-            add_to_serial_buffer(f"Failed to sync data to external server: HTTP {response.status_code}")
+            error_msg = f"HTTP {response.status_code}"
+            try:
+                error_msg += f" - {response.text[:100]}"  # Include first 100 chars of response
+            except:
+                pass
+            add_to_serial_buffer(f"Failed to sync data to external server: {error_msg}")
             # Add all to sync queue for retry
             for data in weather_data_list:
                 config.sync_queue.append(data.copy())
+            sync_info['error'] = error_msg
             return False, sync_info
             
-    except Exception as e:
-        add_to_serial_buffer(f"Error syncing data to external server: {str(e)}")
+    except requests.exceptions.Timeout:
+        error_msg = f"Request timeout after {timeout_seconds} seconds"
+        add_to_serial_buffer(f"Sync timeout: {error_msg}")
         # Add all to sync queue for retry
         for data in weather_data_list:
             config.sync_queue.append(data.copy())
-        sync_info = {
-            'url': config.raspi_settings['external_sync'].get('server_url', 'Unknown'),
-            'payload': prepare_sync_payload(weather_data_list[0]) if weather_data_list else {},
-            'error': str(e),
-            'bulk_count': len(weather_data_list)
-        }
+        sync_info['error'] = error_msg
+        return False, sync_info
+        
+    except requests.exceptions.ConnectionError as e:
+        error_msg = f"Connection error: {str(e)}"
+        add_to_serial_buffer(f"Sync connection error: {error_msg}")
+        # Add all to sync queue for retry
+        for data in weather_data_list:
+            config.sync_queue.append(data.copy())
+        sync_info['error'] = error_msg
+        return False, sync_info
+        
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Request error: {str(e)}"
+        add_to_serial_buffer(f"Sync request error: {error_msg}")
+        # Add all to sync queue for retry
+        for data in weather_data_list:
+            config.sync_queue.append(data.copy())
+        sync_info['error'] = error_msg
+        return False, sync_info
+        
+    except Exception as e:
+        error_msg = f"Unexpected error: {str(e)}"
+        add_to_serial_buffer(f"Error syncing data to external server: {error_msg}")
+        # Add all to sync queue for retry
+        for data in weather_data_list:
+            config.sync_queue.append(data.copy())
+        sync_info['error'] = error_msg
         return False, sync_info
 
 def process_sync_queue():
@@ -519,6 +570,82 @@ def cleanup_scheduler():
             
             last_cleanup = current_time
             add_to_serial_buffer("Daily cleanup completed")
+
+def auto_upload_scheduler():
+    """Auto-upload scheduler - checks and uploads pending data every 5 seconds"""
+    consecutive_errors = 0
+    max_consecutive_errors = 10  # Log warning after 10 consecutive errors
+    
+    while True:
+        try:
+            time.sleep(5)  # Check every 5 seconds
+            
+            # Skip if sync is disabled
+            if not config.raspi_settings['external_sync']['enabled']:
+                continue
+            
+            # Skip if already syncing (prevent concurrent syncs)
+            if config.auto_sync_in_progress:
+                continue
+            
+            # Check internet connection with error handling
+            try:
+                has_internet = check_internet_connection()
+            except Exception as e:
+                add_to_serial_buffer(f"Error checking internet connection: {str(e)}")
+                has_internet = False
+            
+            if not has_internet:
+                consecutive_errors += 1
+                if consecutive_errors >= max_consecutive_errors:
+                    add_to_serial_buffer(f"Auto-upload: No internet connection (checked {consecutive_errors} times)")
+                    consecutive_errors = 0  # Reset counter after logging
+                continue
+            
+            # Reset error counter if we have internet
+            consecutive_errors = 0
+            
+            # Get pending records from database with error handling
+            try:
+                pending_records = db.get_unsynced_data(limit=50)  # Upload max 50 records per batch
+            except Exception as db_error:
+                add_to_serial_buffer(f"Auto-upload: Database error while fetching pending records: {str(db_error)}")
+                time.sleep(5)  # Wait before retrying
+                continue
+            
+            if not pending_records or len(pending_records) == 0:
+                continue  # No pending data, skip
+            
+            # Set flag to prevent concurrent syncs
+            config.auto_sync_in_progress = True
+            
+            try:
+                # Upload pending records
+                sync_success, sync_info = sync_data_to_server(pending_records)
+                
+                if sync_success:
+                    add_to_serial_buffer(f"Auto-upload: {len(pending_records)} records uploaded successfully")
+                else:
+                    error_detail = sync_info.get('error', 'Unknown error') if sync_info else 'Unknown error'
+                    add_to_serial_buffer(f"Auto-upload: Failed to upload {len(pending_records)} records - {error_detail}")
+            except requests.exceptions.Timeout:
+                add_to_serial_buffer(f"Auto-upload: Request timeout while uploading {len(pending_records)} records")
+            except requests.exceptions.ConnectionError:
+                add_to_serial_buffer(f"Auto-upload: Connection error while uploading {len(pending_records)} records")
+            except Exception as e:
+                add_to_serial_buffer(f"Auto-upload error: {type(e).__name__}: {str(e)}")
+            finally:
+                # Always reset flag
+                config.auto_sync_in_progress = False
+                
+        except KeyboardInterrupt:
+            # Allow graceful shutdown
+            add_to_serial_buffer("Auto-upload scheduler interrupted")
+            break
+        except Exception as e:
+            add_to_serial_buffer(f"Auto-upload scheduler error: {type(e).__name__}: {str(e)}")
+            config.auto_sync_in_progress = False
+            time.sleep(5)  # Wait before retrying
 
 # Flask Routes
 @app.route('/')
@@ -1181,6 +1308,11 @@ def main():
     # Start cleanup scheduler in background
     cleanup_thread = threading.Thread(target=cleanup_scheduler, daemon=True)
     cleanup_thread.start()
+    
+    # Start auto-upload scheduler in background (runs every 5 seconds)
+    auto_upload_thread = threading.Thread(target=auto_upload_scheduler, daemon=True)
+    auto_upload_thread.start()
+    add_to_serial_buffer("Auto-upload scheduler started (checks every 5 seconds)")
     
     # Get network information dynamically
     network_info = get_network_info()
