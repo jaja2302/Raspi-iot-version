@@ -267,27 +267,66 @@ def find_process_using_port(port):
     except:
         return None
 
-def setup_iptables():
+def find_available_port(preferred_ports=None):
+    """Find an available port, trying preferred ports first, then searching"""
+    if preferred_ports is None:
+        preferred_ports = [80, 8080, 8000, 8888, 9000]
+    
+    # Try preferred ports first
+    for port in preferred_ports:
+        if check_port_available(port):
+            return port
+    
+    # If no preferred port is available, find any available port
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(('', 0))  # Bind to any available port
+    port = sock.getsockname()[1]
+    sock.close()
+    return port
+
+def setup_iptables(server_port=80):
     """Setup iptables redirect"""
     try:
-        # Check if rule exists
-        check = subprocess.run(
-            ['sudo', 'iptables', '-t', 'nat', '-C', 'PREROUTING', '-i', 'wlan0', '-p', 'tcp', '--dport', '80', '-j', 'REDIRECT', '--to-port', '80'],
-            capture_output=True
-        )
-        
-        if check.returncode != 0:
-            # Add rule
-            subprocess.run([
-                'sudo', 'iptables', '-t', 'nat', '-A', 'PREROUTING',
-                '-i', 'wlan0', '-p', 'tcp', '--dport', '80',
-                '-j', 'REDIRECT', '--to-port', '80'
-            ], check=True)
-            print("[IPTABLES] Redirect rule added")
-            return True
+        # Only setup redirect if server is on port 80
+        # If server is on different port, redirect from 80 to that port
+        if server_port == 80:
+            # Check if rule exists
+            check = subprocess.run(
+                ['sudo', 'iptables', '-t', 'nat', '-C', 'PREROUTING', '-i', 'wlan0', '-p', 'tcp', '--dport', '80', '-j', 'REDIRECT', '--to-port', '80'],
+                capture_output=True
+            )
+            
+            if check.returncode != 0:
+                # Add rule
+                subprocess.run([
+                    'sudo', 'iptables', '-t', 'nat', '-A', 'PREROUTING',
+                    '-i', 'wlan0', '-p', 'tcp', '--dport', '80',
+                    '-j', 'REDIRECT', '--to-port', '80'
+                ], check=True)
+                print("[IPTABLES] Redirect rule added (port 80 -> 80)")
+                return True
+            else:
+                print("[IPTABLES] Redirect rule already exists (port 80 -> 80)")
+                return True
         else:
-            print("[IPTABLES] Redirect rule already exists")
-            return True
+            # Redirect from port 80 to the server port
+            check = subprocess.run(
+                ['sudo', 'iptables', '-t', 'nat', '-C', 'PREROUTING', '-i', 'wlan0', '-p', 'tcp', '--dport', '80', '-j', 'REDIRECT', '--to-port', str(server_port)],
+                capture_output=True
+            )
+            
+            if check.returncode != 0:
+                # Add rule
+                subprocess.run([
+                    'sudo', 'iptables', '-t', 'nat', '-A', 'PREROUTING',
+                    '-i', 'wlan0', '-p', 'tcp', '--dport', '80',
+                    '-j', 'REDIRECT', '--to-port', str(server_port)
+                ], check=True)
+                print("[IPTABLES] Redirect rule added (port 80 -> {})".format(server_port))
+                return True
+            else:
+                print("[IPTABLES] Redirect rule already exists (port 80 -> {})".format(server_port))
+                return True
     except Exception as e:
         print("[IPTABLES ERROR] {}".format(e))
         return False
@@ -305,9 +344,21 @@ def main():
     device_id = load_device_id()
     print("[CONFIG] Device ID: {}".format(device_id))
     
+    # Find available port
+    print("\n[SETUP] Finding available port...")
+    server_port = find_available_port()
+    if server_port == 80:
+        print("[OK] Port 80 is available")
+    else:
+        print("[INFO] Port 80 is in use, using port {} instead".format(server_port))
+        process_info = find_process_using_port(80)
+        if process_info:
+            print("[INFO] Process using port 80:")
+            print(process_info)
+    
     # Setup iptables
     print("\n[SETUP] Configuring iptables redirect...")
-    setup_iptables()
+    setup_iptables(server_port)
     
     # Set handler
     MisolHandler.db = db
@@ -320,8 +371,10 @@ def main():
     
     # Start HTTP server
     try:
-        httpd = HTTPServer(('0.0.0.0', 80), MisolHandler)
-        print("[HTTP] HTTP Server started on port 80")
+        httpd = HTTPServer(('0.0.0.0', server_port), MisolHandler)
+        print("[HTTP] HTTP Server started on port {}".format(server_port))
+        if server_port != 80:
+            print("[INFO] Note: iptables redirects port 80 -> {}".format(server_port))
         print("\n[INFO] All systems ready!")
         print("[INFO] Mode: DUAL (HTTP + Sniffer)")
         print("[INFO] Dapat data dengan LAN atau tanpa LAN")
@@ -329,6 +382,13 @@ def main():
         print("=" * 60)
         
         httpd.serve_forever()
+    except OSError as e:
+        if e.errno == 98:  # Address already in use
+            print("\n[ERROR] Port {} is now in use!".format(server_port))
+            print("[ERROR] Another process may have started using the port.")
+            print("[INFO] Try: sudo pkill -f misol_hybrid.py")
+        else:
+            print("[ERROR] {}".format(e))
     except KeyboardInterrupt:
         print("\n[INFO] Server stopped")
         sniffer.stop()
