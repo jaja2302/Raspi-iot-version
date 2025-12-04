@@ -176,3 +176,25 @@ Contoh payload JSON:
 └── logs/                 # Berkas log
     └── weather_station.log
 ```
+
+
+Rangkuman Fix Hotspot Raspberry Pi 3:
+Problem:
+
+NetworkManager error 802.1X supplicant di Raspberry Pi 3
+Chipset BCM43438 di Pi 3 tidak kompatibel dengan NetworkManager untuk mode AP
+
+Solution:
+bash# Install RaspAP
+curl -sL https://install.raspap.com | bash
+Setup:
+
+Akses web interface: http://IP_RASPI
+Login: admin / secret
+Setup hotspot via web GUI
+Auto-start sudah enabled by default
+
+Enable auto-start (opsional):
+bashsudo systemctl enable hostapd
+sudo systemctl enable dnsmasq
+Done! Hotspot siap, lebih stabil di Pi 3, dan bisa manage via web interface. 👍

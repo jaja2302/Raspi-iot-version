@@ -3,32 +3,44 @@
 // Set content type to JSON for all responses
 header('Content-Type: application/json');
 
+// Helper function to round numeric values to 2 decimal places
+function roundToTwoDecimals($value)
+{
+    if ($value === "" || $value === null || $value === false) {
+        return "";
+    }
+    if (is_numeric($value)) {
+        return round((float)$value, 2);
+    }
+    return $value;
+}
+
 // Function to prepare single weather data for API
 function prepareWeatherData($weatherData)
 {
     return [
-        'idws' => isset($weatherData['idws']) ? $weatherData['idws'] : "",
-        'date' => isset($weatherData['date']) ? $weatherData['date'] : "",
-        'windspeedkmh' => isset($weatherData['windspeedkmh']) ? $weatherData['windspeedkmh'] : "",
-        'winddir' => isset($weatherData['winddir']) ? $weatherData['winddir'] : "",
-        'rain_rate' => isset($weatherData['rain_rate']) ? $weatherData['rain_rate'] : "",
-        'rain_today' => isset($weatherData['rain_today']) ? $weatherData['rain_today'] : "",
-        'temp_in' => isset($weatherData['temp_in']) ? $weatherData['temp_in'] : "",
-        'temp_out' => isset($weatherData['temp_out']) ? $weatherData['temp_out'] : "",
-        'hum_in' => isset($weatherData['hum_in']) ? $weatherData['hum_in'] : "",
-        'hum_out' => isset($weatherData['hum_out']) ? $weatherData['hum_out'] : "",
-        'uv' => isset($weatherData['uv']) ? $weatherData['uv'] : "",
-        'wind_gust' => isset($weatherData['wind_gust']) ? $weatherData['wind_gust'] : "",
-        'air_press_rel' => isset($weatherData['air_press_rel']) ? $weatherData['air_press_rel'] : "",
-        'air_press_abs' => isset($weatherData['air_press_abs']) ? $weatherData['air_press_abs'] : "",
-        'solar_radiation' => isset($weatherData['solar_radiation']) ? $weatherData['solar_radiation'] : "",
-        'dailyrainin' => isset($weatherData['dailyrainin']) ? $weatherData['dailyrainin'] : "",
-        'raintodayin' => isset($weatherData['raintodayin']) ? $weatherData['raintodayin'] : "",
-        'weeklyrainin' => isset($weatherData['weeklyrainin']) ? $weatherData['weeklyrainin'] : "",
-        'monthlyrainin' => isset($weatherData['monthlyrainin']) ? $weatherData['monthlyrainin'] : "",
-        'yearlyrainin' => isset($weatherData['yearlyrainin']) ? $weatherData['yearlyrainin'] : "",
-        'maxdailygust' => isset($weatherData['maxdailygust']) ? $weatherData['maxdailygust'] : "",
-        'wh65batt' => isset($weatherData['wh65batt']) ? $weatherData['wh65batt'] : ""
+        'idws' => isset($weatherData['idws']) ? $weatherData['idws'] : 99,
+        'date' => isset($weatherData['date']) ? $weatherData['date'] : 0,
+        'windspeedkmh' => isset($weatherData['windspeedkmh']) ? roundToTwoDecimals($weatherData['windspeedkmh']) : 0,
+        'winddir' => isset($weatherData['winddir']) ? $weatherData['winddir'] : 0,
+        'rain_rate' => isset($weatherData['rain_rate']) ? roundToTwoDecimals($weatherData['rain_rate']) : 0,
+        'rain_today' => isset($weatherData['rain_today']) ? roundToTwoDecimals($weatherData['rain_today']) : 0,
+        'temp_in' => isset($weatherData['temp_in']) ? roundToTwoDecimals($weatherData['temp_in']) : 0,
+        'temp_out' => isset($weatherData['temp_out']) ? roundToTwoDecimals($weatherData['temp_out']) : 0,
+        'hum_in' => isset($weatherData['hum_in']) ? $weatherData['hum_in'] : 0,
+        'hum_out' => isset($weatherData['hum_out']) ? $weatherData['hum_out'] : 0,
+        'uv' => isset($weatherData['uv']) ? roundToTwoDecimals($weatherData['uv']) : 0,
+        'wind_gust' => isset($weatherData['wind_gust']) ? roundToTwoDecimals($weatherData['wind_gust']) : 0,
+        'air_press_rel' => isset($weatherData['air_press_rel']) ? roundToTwoDecimals($weatherData['air_press_rel']) : 0,
+        'air_press_abs' => isset($weatherData['air_press_abs']) ? roundToTwoDecimals($weatherData['air_press_abs']) : 0,
+        'solar_radiation' => isset($weatherData['solar_radiation']) ? roundToTwoDecimals($weatherData['solar_radiation']) : 0,
+        'dailyrainin' => isset($weatherData['dailyrainin']) ? roundToTwoDecimals($weatherData['dailyrainin']) : 0,
+        'raintodayin' => isset($weatherData['raintodayin']) ? roundToTwoDecimals($weatherData['raintodayin']) : 0,
+        'weeklyrainin' => isset($weatherData['weeklyrainin']) ? roundToTwoDecimals($weatherData['weeklyrainin']) : 0,
+        'monthlyrainin' => isset($weatherData['monthlyrainin']) ? roundToTwoDecimals($weatherData['monthlyrainin']) : 0,
+        'yearlyrainin' => isset($weatherData['yearlyrainin']) ? roundToTwoDecimals($weatherData['yearlyrainin']) : 0,
+        'maxdailygust' => isset($weatherData['maxdailygust']) ? roundToTwoDecimals($weatherData['maxdailygust']) : 0,
+        'wh65batt' => isset($weatherData['wh65batt']) ? roundToTwoDecimals($weatherData['wh65batt']) : 0
     ];
 }
 
