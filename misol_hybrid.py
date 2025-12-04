@@ -12,6 +12,7 @@ from datetime import datetime
 from database import WeatherDatabase
 import json
 import os
+import socket
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 class MisolHandler(BaseHTTPRequestHandler):
@@ -241,6 +242,30 @@ def load_device_id():
             pass
     return device_id
 
+
+def check_port_available(port):
+    """Check if a port is available"""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind(('0.0.0.0', port))
+        sock.close()
+        return True
+    except OSError:
+        return False
+
+def find_process_using_port(port):
+    """Find the process ID using a specific port"""
+    try:
+        result = subprocess.run(
+            ['sudo', 'lsof', '-i', ':{}'.format(port)],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0 and result.stdout:
+            return result.stdout
+        return None
+    except:
+        return None
 
 def setup_iptables():
     """Setup iptables redirect"""
